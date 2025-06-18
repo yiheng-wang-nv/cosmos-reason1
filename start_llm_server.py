@@ -5,6 +5,8 @@ from transformers import AutoProcessor
 import uvicorn
 from PIL import Image
 import os
+import base64
+import io
 from typing import Optional
 
 MODEL_PATH = "nvidia/Cosmos-Reason1-7B"
@@ -139,7 +141,8 @@ def main():
             return fallback
     
     class PromptRequest(BaseModel):
-        image_path: str
+        image_path: Optional[str] = None  # For local file path (server-side files)
+        image_base64: Optional[str] = None  # For base64-encoded image data (remote clients)
         user_message: Optional[str] = None
         system_message: Optional[str] = None
         phase: Optional[str] = "initial"  # "initial" or "verification" - determines default messages
@@ -153,7 +156,8 @@ def main():
         
         Args:
             request: PromptRequest containing:
-                - image_path: Path to surgical environment image
+                - image_path: Path to surgical environment image (for server-side files)
+                - image_base64: Base64-encoded image data (for remote clients)
                 - phase: "initial" (tool identification/planning) or "verification" (completion check)
                 - user_message/system_message: Optional custom messages (overrides phase defaults)
                 - max_tokens/temperature: Sampling parameters
@@ -161,16 +165,42 @@ def main():
         Returns:
             dict: Analysis response with structured reasoning/plan format
         """
-        # Validate image file exists
-        if not os.path.exists(request.image_path):
-            return {"error": f"Image file does not exist: {request.image_path}"}
+        # Validate that either image_path or image_base64 is provided
+        if not request.image_path and not request.image_base64:
+            return {"error": "Either image_path or image_base64 must be provided"}
+        
+        if request.image_path and request.image_base64:
+            return {"error": "Provide either image_path OR image_base64, not both"}
         
         # Validate max_tokens range (reasonable limits)
         max_tokens = min(max(request.max_tokens, 128), 8192)  # Clamp between 128 and 8192
         temperature = min(max(request.temperature, 0.0), 2.0)  # Clamp between 0.0 and 2.0
         
         try:
-            image = Image.open(request.image_path)
+            # Load image from either file path or base64 data
+            if request.image_path:
+                # Server-side file path
+                if not os.path.exists(request.image_path):
+                    return {"error": f"Image file does not exist: {request.image_path}"}
+                image = Image.open(request.image_path)
+            else:
+                # Base64-encoded image from remote client
+                try:
+                    # Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
+                    base64_data = request.image_base64
+                    if base64_data.startswith('data:'):
+                        base64_data = base64_data.split(',', 1)[1]
+                    
+                    # Decode base64 to bytes
+                    image_bytes = base64.b64decode(base64_data)
+                    # Create PIL Image from bytes
+                    image = Image.open(io.BytesIO(image_bytes))
+                except Exception as e:
+                    return {"error": f"Failed to decode base64 image: {str(e)}"}
+            
+            # Convert to RGB if necessary (some formats like RGBA or P mode can cause issues)
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
             
             # Use custom messages if provided, otherwise use phase-appropriate defaults
             system_text = request.system_message if request.system_message else load_default_system_message(request.phase)

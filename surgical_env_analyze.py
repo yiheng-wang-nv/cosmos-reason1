@@ -4,6 +4,7 @@ import json
 import sys
 import os
 import re
+import base64
 from typing import List, Optional
 
 # Terminal colors and formatting
@@ -271,7 +272,8 @@ def print_structured_response(response_text: str, phase: Optional[str] = None):
 
 def send_request(image_path: str, user_message: Optional[str] = None, 
                 system_message: Optional[str] = None, server_url: str = "http://localhost:8000", 
-                phase: Optional[str] = None, max_tokens: int = 1024, temperature: float = 0.0):
+                phase: Optional[str] = None, max_tokens: int = 1024, temperature: float = 0.0,
+                use_base64: bool = False):
     """
     Send a request to the LLM server for surgical tool analysis.
     
@@ -283,6 +285,7 @@ def send_request(image_path: str, user_message: Optional[str] = None,
         phase (str, optional): Operation phase - "initial", "verification", or None for auto-detection.
         max_tokens (int): Maximum tokens for response generation. Defaults to 1024.
         temperature (float): Temperature for response generation. Defaults to 0.0.
+        use_base64 (bool): If True, encode image as base64 and send in request body. Defaults to False.
     """
     
     # Check if image file exists
@@ -316,10 +319,24 @@ def send_request(image_path: str, user_message: Optional[str] = None,
     
     # Prepare request data
     request_data = {
-        "image_path": image_path,
         "max_tokens": max_tokens,
         "temperature": temperature
     }
+    
+    # Handle image input - either file path or base64 encoding
+    if use_base64:
+        # Encode image as base64 for remote server
+        try:
+            with open(image_path, "rb") as image_file:
+                image_data = base64.b64encode(image_file.read()).decode('utf-8')
+                request_data["image_base64"] = image_data
+                print(f"{colorize(Icons.INFO, Colors.CYAN)} Image encoded as base64 ({len(image_data)} chars)")
+        except Exception as e:
+            print(f"{colorize(Icons.ERROR, Colors.RED)} Failed to encode image: {e}")
+            sys.exit(1)
+    else:
+        # Use file path for local server
+        request_data["image_path"] = image_path
     
     # Add phase if specified
     if phase:
@@ -419,6 +436,9 @@ def main():
   {colorize('Custom system message:', Colors.WHITE)}
     python surgical_env_analyze.py image.jpg --system-file custom_prompt.txt
   
+  {colorize('Remote server (base64 encoding):', Colors.WHITE)}
+    python surgical_env_analyze.py image.jpg --server http://remote-server:8000 --use-base64
+  
   {colorize('Full configuration:', Colors.WHITE)}
     python surgical_env_analyze.py image.jpg --phase initial --max-tokens 2048 --temperature 0.1
         """
@@ -473,6 +493,12 @@ def main():
         default="http://localhost:8000"
     )
     
+    parser.add_argument(
+        "--use-base64", "-b",
+        action="store_true",
+        help="Encode image as base64 and send in request body (for remote servers)"
+    )
+    
     args = parser.parse_args()
 
     # Print welcome header
@@ -504,7 +530,7 @@ def main():
     
     # Send request
     send_request(args.image_path, args.message, system_message, args.server, 
-                args.phase, max_tokens, temperature)
+                args.phase, max_tokens, temperature, args.use_base64)
 
 if __name__ == "__main__":
     main() 
