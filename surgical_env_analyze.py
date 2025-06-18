@@ -11,7 +11,12 @@ import requests
 import sys
 import re
 import base64
+import cv2
+import io
+from PIL import Image
 from typing import Optional, List
+from datetime import datetime
+import os
 
 # Terminal colors and formatting
 class Colors:
@@ -176,21 +181,115 @@ def print_structured_response(response_text: str):
     if not sections["reasoning"] and not sections["plan"]:
         print_section("RAW RESPONSE", response_text, Icons.INFO, Colors.YELLOW)
 
-def send_request(image_path: str, user_message: Optional[str] = None, 
-                system_message: Optional[str] = None, server_url: str = "http://localhost:8000", 
-                max_tokens: int = 1024, temperature: float = 0.0,
-                use_base64: bool = False):
+def capture_camera_image(camera_index: int = 0, preview: bool = False, save_debug: bool = False) -> Optional[Image.Image]:
     """
-    Send analysis request to the server.
+    Capture an image from the camera.
     
     Args:
-        image_path (str): Path to the image file
-        user_message (str, optional): Custom user message
-        system_message (str, optional): Custom system message
-        server_url (str): Server URL
-        max_tokens (int): Maximum tokens for response
-        temperature (float): Temperature for response generation
-        use_base64 (bool): Whether to encode image as base64
+        camera_index (int): Camera index (0 for default camera)
+        preview (bool): Show preview window before capture
+        save_debug (bool): Save captured image to disk for debugging
+        
+    Returns:
+        PIL.Image.Image: Captured image or None if failed
+    """
+    cap = cv2.VideoCapture(camera_index)
+    
+    if not cap.isOpened():
+        print(f"{colorize(Icons.ERROR, Colors.RED)} Failed to open camera {camera_index}")
+        return None
+    
+    # Set camera properties for better quality
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap.set(cv2.CAP_PROP_FPS, 15)
+    
+    print(f"{colorize(Icons.INFO, Colors.CYAN)} Camera {camera_index} opened successfully")
+    print(f"{colorize(Icons.INFO, Colors.CYAN)} Resolution: {int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))}")
+    
+    # Let camera warm up and clear buffer
+    print(f"{colorize(Icons.INFO, Colors.CYAN)} Warming up camera...")
+    for _ in range(10):
+        cap.read()
+    
+    if preview:
+        print(f"{colorize(Icons.INFO, Colors.CYAN)} Preview mode: Press SPACE to capture, 'q' to quit")
+        
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print(f"{colorize(Icons.ERROR, Colors.RED)} Failed to read from camera")
+                cap.release()
+                return None
+            
+            # Display the frame
+            cv2.imshow('Camera Preview - Press SPACE to capture, Q to quit', frame)
+            
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord(' '):  # Space to capture
+                # Capture a fresh frame
+                ret, fresh_frame = cap.read()
+                if not ret:
+                    print(f"{colorize(Icons.ERROR, Colors.RED)} Failed to capture fresh frame")
+                    cap.release()
+                    cv2.destroyAllWindows()
+                    return None
+                
+                # Convert BGR to RGB and then to PIL Image
+                rgb_frame = cv2.cvtColor(fresh_frame, cv2.COLOR_BGR2RGB)
+                pil_image = Image.fromarray(rgb_frame)
+                
+                cap.release()
+                cv2.destroyAllWindows()
+                print(f"{colorize(Icons.SUCCESS, Colors.GREEN)} Image captured!")
+                
+                # Always save captured image with timestamp
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                saved_filename = f"captured_cam{camera_index}_{timestamp}.jpg"
+                pil_image.save(saved_filename, quality=95)
+                print(f"{colorize(Icons.SUCCESS, Colors.GREEN)} Image saved: {saved_filename}")
+                
+                return pil_image
+            elif key == ord('q'):  # Quit
+                cap.release()
+                cv2.destroyAllWindows()
+                print(f"{colorize(Icons.WARNING, Colors.YELLOW)} Capture cancelled")
+                return None
+    else:
+        # Capture immediately without preview
+        print(f"{colorize(Icons.INFO, Colors.CYAN)} Capturing image directly...")
+        ret, frame = cap.read()
+        cap.release()
+        
+        if not ret:
+            print(f"{colorize(Icons.ERROR, Colors.RED)} Failed to capture image")
+            return None
+        
+        # Convert BGR to RGB and then to PIL Image
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        pil_image = Image.fromarray(rgb_frame)
+        
+        # Always save captured image with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        saved_filename = f"captured_cam{camera_index}_{timestamp}.jpg"
+        pil_image.save(saved_filename, quality=95)
+        print(f"{colorize(Icons.SUCCESS, Colors.GREEN)} Image captured and saved: {saved_filename}")
+        
+        # Save debug image if requested (additional debug info)
+        if save_debug:
+            debug_filename = f"debug_capture_{camera_index}_{timestamp}.jpg"
+            pil_image.save(debug_filename, quality=95)
+            print(f"{colorize(Icons.SUCCESS, Colors.GREEN)} Debug image also saved: {debug_filename}")
+        
+        return pil_image
+
+def send_request(image_path: Optional[str] = None, camera_index: Optional[int] = None,
+                user_message: Optional[str] = None, system_message: Optional[str] = None, 
+                server_url: str = "http://localhost:8000", max_tokens: int = 1024, 
+                temperature: float = 0.0, use_base64: bool = False, 
+                camera_preview: bool = False, debug_mode: bool = False):
+    """
+    Send analysis request to the server.
     """
     # Print configuration
     print_config_info(max_tokens, temperature)
@@ -201,21 +300,66 @@ def send_request(image_path: str, user_message: Optional[str] = None,
         "temperature": temperature
     }
     
-    # Handle image encoding
-    if use_base64:
-        # Read and encode image as base64
-        try:
-            with open(image_path, "rb") as image_file:
-                image_data = image_file.read()
-                base64_encoded = base64.b64encode(image_data).decode('utf-8')
-                request_data["image_base64"] = base64_encoded
-                print(f"{colorize(Icons.INFO, Colors.CYAN)} Image encoded as base64: {len(base64_encoded)} characters")
-        except Exception as e:
-            print(f"{colorize(Icons.ERROR, Colors.RED)} Failed to encode image: {e}")
+    # Handle image source
+    pil_image = None
+    captured_filename = None
+    
+    if camera_index is not None:
+        # Capture from camera
+        pil_image = capture_camera_image(camera_index, camera_preview, debug_mode)
+        if pil_image is None:
             return
+        
+        # Store the filename for reference
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        captured_filename = f"captured_cam{camera_index}_{timestamp}.jpg"
+        
+        # Always use base64 for camera images since there's no file path
+        use_base64 = True
+        print(f"{colorize(Icons.INFO, Colors.CYAN)} Using camera capture with base64 encoding")
+        print(f"{colorize(Icons.INFO, Colors.CYAN)} Image size: {pil_image.size}, mode: {pil_image.mode}")
+        
+    elif image_path:
+        # Handle file path
+        if use_base64:
+            # Read and encode image as base64
+            try:
+                with open(image_path, "rb") as image_file:
+                    image_data = image_file.read()
+                    base64_encoded = base64.b64encode(image_data).decode('utf-8')
+                    request_data["image_base64"] = base64_encoded
+                    print(f"{colorize(Icons.INFO, Colors.CYAN)} Image encoded as base64: {len(base64_encoded)} characters")
+            except Exception as e:
+                print(f"{colorize(Icons.ERROR, Colors.RED)} Failed to encode image: {e}")
+                return
+        else:
+            # Use file path for local server
+            request_data["image_path"] = image_path
     else:
-        # Use file path for local server
-        request_data["image_path"] = image_path
+        print(f"{colorize(Icons.ERROR, Colors.RED)} Either image_path or camera_index must be provided")
+        return
+    
+    # Handle camera image encoding
+    if pil_image and use_base64:
+        try:
+            # Convert PIL image to base64
+            buffer = io.BytesIO()
+            pil_image.save(buffer, format='JPEG', quality=95)
+            image_data = buffer.getvalue()
+            base64_encoded = base64.b64encode(image_data).decode('utf-8')
+            request_data["image_base64"] = base64_encoded
+            print(f"{colorize(Icons.INFO, Colors.CYAN)} Camera image encoded as base64: {len(base64_encoded)} characters")
+            
+            # Debug: Save the exact image being sent (if debug mode)
+            if debug_mode:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                debug_sent_filename = f"debug_sent_to_server_{timestamp}.jpg"
+                pil_image.save(debug_sent_filename, quality=95)
+                print(f"{colorize(Icons.SUCCESS, Colors.GREEN)} Image being sent saved as: {debug_sent_filename}")
+                
+        except Exception as e:
+            print(f"{colorize(Icons.ERROR, Colors.RED)} Failed to encode camera image: {e}")
+            return
     
     # Use custom messages if provided
     if user_message:
@@ -239,6 +383,12 @@ def send_request(image_path: str, user_message: Optional[str] = None,
             
             # Print header
             print_header("SURGICAL ENVIRONMENT ANALYSIS RESULT", Icons.MEDICAL, Colors.GREEN)
+            
+            # Show which image was analyzed
+            if captured_filename:
+                print(f"\n{colorize(Icons.INFO, Colors.CYAN)} {colorize('Analyzed image:', Colors.WHITE, bold=True)} {colorize(captured_filename, Colors.YELLOW)}")
+            elif image_path:
+                print(f"\n{colorize(Icons.INFO, Colors.CYAN)} {colorize('Analyzed image:', Colors.WHITE, bold=True)} {colorize(image_path, Colors.YELLOW)}")
             
             # Print server configuration info if available
             if "config" in result:
@@ -295,26 +445,34 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
 {colorize('Examples:', Colors.CYAN, bold=True)}
-  {colorize('Basic usage:', Colors.WHITE)}
-    python surgical_env_analyze.py image.jpg
+  {colorize('Direct camera capture:', Colors.WHITE)}
+    python surgical_env_analyze.py --camera 2
   
-  {colorize('Custom token limits:', Colors.WHITE)}
-    python surgical_env_analyze.py image.jpg --max-tokens 2048
-    python surgical_env_analyze.py image.jpg --max-tokens 4096 --temperature 0.2
+  {colorize('Camera with preview:', Colors.WHITE)}
+    python surgical_env_analyze.py --camera 2 --preview
   
-  {colorize('Custom system message:', Colors.WHITE)}
-    python surgical_env_analyze.py image.jpg --system-file custom_prompt.txt
-  
-  {colorize('Remote server (base64 encoding):', Colors.WHITE)}
-    python surgical_env_analyze.py image.jpg --server http://remote-server:8000 --use-base64
-  
-  {colorize('Full configuration:', Colors.WHITE)}
-    python surgical_env_analyze.py image.jpg --max-tokens 2048 --temperature 0.1
+  {colorize('File analysis:', Colors.WHITE)}
+    python surgical_env_analyze.py image.jpg --server http://10.176.228.194:8000
         """
     )
     
-    # Required argument: image path
-    parser.add_argument("image_path", nargs='?', help="Path to the image file to analyze")
+    # Image source (mutually exclusive)
+    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group.add_argument("image_path", nargs='?', help="Path to the image file to analyze")
+    source_group.add_argument("--camera", "-c", type=int, help="Camera index to capture from (e.g., 0, 1, 2)")
+    
+    # Camera options
+    parser.add_argument(
+        "--preview", 
+        action="store_true",
+        help="Show camera preview before capture (default: direct capture)"
+    )
+    
+    parser.add_argument(
+        "--debug", 
+        action="store_true",
+        help="Enable debug mode (saves captured images to disk)"
+    )
     
     # Optional arguments
     parser.add_argument(
@@ -365,12 +523,6 @@ def main():
 
     # Print welcome header
     print_header("SURGICAL ENVIRONMENT ANALYSIS CLIENT", Icons.ROBOT, Colors.MAGENTA)
-
-    # Require image path for analysis
-    if not args.image_path:
-        print(f"{colorize(Icons.ERROR, Colors.RED)} {colorize('Error:', Colors.RED, bold=True)} Image path is required for analysis")
-        parser.print_help()
-        sys.exit(1)
     
     # Validate parameter ranges
     max_tokens = min(max(args.max_tokens, 128), 8192)
@@ -391,8 +543,18 @@ def main():
             sys.exit(1)
     
     # Send request
-    send_request(args.image_path, args.message, system_message, args.server, 
-                max_tokens, temperature, args.use_base64)
+    send_request(
+        image_path=args.image_path,
+        camera_index=args.camera,
+        user_message=args.message, 
+        system_message=system_message, 
+        server_url=args.server,
+        max_tokens=max_tokens, 
+        temperature=temperature, 
+        use_base64=args.use_base64,
+        camera_preview=args.preview,
+        debug_mode=args.debug
+    )
 
 if __name__ == "__main__":
     main() 

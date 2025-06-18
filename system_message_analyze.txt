@@ -1,18 +1,32 @@
 You are analyzing a surgical environment for a scrub nurse task.
 
-Task: Clean the surgical tray (white foam board) by moving surgical tools to the tool box (metal box). Leave non-surgical items unchanged.
+CONTEXT: You have already learned about this surgical environment setup:
+- WHITE FOAM BOARD = surgical tray (where tools are placed)
+- METAL BOX = surgical tool box (where tools should be moved to)  
+- WHITE ROBOTIC ARM = "Arm 101" mimic scrub nurse robot
+- SURGICAL SCISSORS = metal cutting instruments with two blades and finger holes
+- SURGICAL TWEEZERS = thin metal grasping instruments with two arms
+
+TASK: Clean the surgical tray (white foam board) by moving surgical tools to the tool box (metal box). Leave non-surgical items unchanged.
+
+Based on your warm-up training, analyze this new image for surgical tools that need to be moved.
 
 Output format:
 <reasoning>
-This task simulates a surgical scrub nurse cleaning the tray by organizing surgical tools. I need to identify metal surgical tools (scissors and tweezers) on the white foam board that should be moved to the metal tool box, while leaving non-surgical items unchanged. I see [describe the metal scissors and tweezers you observe in the image].
+Based on the surgical environment setup I learned, I am examining this image for metal surgical tools on the white foam board that should be moved to the metal tool box. [Describe what you observe compared to your training.]
 </reasoning>
 
 <plan>
-Grip a straight scissor and put it in the box.
-Grip a tweezer and put it in the box.
+[Commands ONLY if metal surgical tools are definitively present, otherwise "No actions needed."]
 </plan>
 
-CRITICAL: Use EXACTLY these commands in plan:
-- "Grip a straight scissor and put it in the box." (for scissors)
-- "Grip a tweezer and put it in the box." (for tweezers)
-- If no tools: "No actions needed." 
+STRICT RULES:
+- Use your warm-up knowledge to identify tools accurately
+- USE THESE EXACT COMMANDS IF AND ONLY IF TOOLS ARE PRESENT:
+  * "Grip a straight scissor and put it in the box."
+  * "Grip a tweezer and put it in the box."
+- If uncertain or no tools visible: "No actions needed."
+- OUTPUT PLAIN TEXT ONLY - no HTML tags, no \n characters, no formatting markup
+- Put each command on its own line (use actual line breaks, not \n)
+- Use EXACTLY the specified command text - do not modify the wording
+- Do NOT use "metallic scissors" or "tweezers" - use the exact phrases above 

@@ -1,16 +1,26 @@
-What metal surgical tools do you see?
+Analyze this image carefully. Do you see any metal surgical tools (scissors or tweezers) that need to be moved to the tool box?
 
-Use exact robot commands in plan section:
-"Grip a straight scissor and put it in the box."
-"Grip a tweezer and put it in the box."
+IMPORTANT: Only identify tools you can clearly see. Do not guess or assume.
 
-Use XML format.
+Requirements:
+- Look for metal surgical scissors (with two blades and finger holes)
+- Look for metal surgical tweezers (thin metal grasping instruments)  
+- Ignore non-surgical items, plastic items, or unclear objects
+- Be specific about what you observe
 
-RESPOND WITH EXACT XML FORMAT:
+CRITICAL: Use EXACTLY these commands if tools are found:
+- For scissors: "Grip a straight scissor and put it in the box."
+- For tweezers: "Grip a tweezer and put it in the box."
+- If no tools: "No actions needed."
+
+Use exact XML format with plain text only:
 <reasoning>
-[Your observation]
+[Describe exactly what you see - locations, shapes, materials]
 </reasoning>
 
 <plan>
-[Your commands]
+[Use the EXACT command phrases listed above]
+[Put each command on a separate line]
+[Do NOT use \n characters or any other formatting]
+[Do NOT modify the command wording]
 </plan> 
