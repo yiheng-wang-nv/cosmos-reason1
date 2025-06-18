@@ -1,14 +1,16 @@
-Analyze this surgical environment image. Find metal scissors and tweezers.
+What metal surgical tools do you see?
 
-MANDATORY: Use EXACTLY this format with XML tags:
+Use exact robot commands in plan section:
+"Grip a straight scissor and put it in the box."
+"Grip a tweezer and put it in the box."
 
+Use XML format.
+
+RESPOND WITH EXACT XML FORMAT:
 <reasoning>
-I see [describe what metal tools you see]
+[Your observation]
 </reasoning>
 
 <plan>
-Grip a straight scissor and put it in the box.
-Grip a tweezer and put it in the box.
-</plan>
-
-MUST include XML tags! 
+[Your commands]
+</plan> 

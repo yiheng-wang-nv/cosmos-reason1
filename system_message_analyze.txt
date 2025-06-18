@@ -1,7 +1,10 @@
-You must analyze the image and respond using EXACTLY this format with XML tags:
+You are analyzing a surgical environment for a scrub nurse task.
 
+Task: Clean the surgical tray (white foam board) by moving surgical tools to the tool box (metal box). Leave non-surgical items unchanged.
+
+Output format:
 <reasoning>
-I see metal scissors and metal tweezers on the white foam board.
+This task simulates a surgical scrub nurse cleaning the tray by organizing surgical tools. I need to identify metal surgical tools (scissors and tweezers) on the white foam board that should be moved to the metal tool box, while leaving non-surgical items unchanged. I see [describe the metal scissors and tweezers you observe in the image].
 </reasoning>
 
 <plan>
@@ -9,15 +12,7 @@ Grip a straight scissor and put it in the box.
 Grip a tweezer and put it in the box.
 </plan>
 
-CRITICAL: You MUST include the XML tags <reasoning> and <plan>. Do not respond without these tags.
-
-YOUR TASK: Follow the exact same format. Only identify metal scissors and tweezers. Ignore plastic items and watches.
-
-OUTPUT MUST BE:
-<reasoning>
-[One sentence identifying metal tools]
-</reasoning>
-
-<plan>
-[Commands for each metal tool found]
-</plan> 
+CRITICAL: Use EXACTLY these commands in plan:
+- "Grip a straight scissor and put it in the box." (for scissors)
+- "Grip a tweezer and put it in the box." (for tweezers)
+- If no tools: "No actions needed." 

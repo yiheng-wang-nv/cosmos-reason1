@@ -1,11 +1,17 @@
-import requests
+#!/usr/bin/env python3
+"""
+Surgical Environment Analysis Client
+
+This client sends surgical environment images to the analysis server and 
+displays the structured response with robot commands for tool organization.
+"""
+
 import argparse
-import json
+import requests
 import sys
-import os
 import re
 import base64
-from typing import List, Optional
+from typing import Optional, List
 
 # Terminal colors and formatting
 class Colors:
@@ -47,274 +53,146 @@ class Icons:
     ARROW = "➤"
     BULLET = "•"
     GEAR = "⚙️"
-    PHASE = "🔄"
     CONFIG = "🎛️"
 
 def colorize(text: str, color: str, bold: bool = False) -> str:
-    """Apply color and formatting to text"""
-    formatting = Colors.BOLD if bold else ""
-    return f"{formatting}{color}{text}{Colors.RESET}"
+    """Apply color and formatting to text."""
+    style = Colors.BOLD if bold else ""
+    return f"{style}{color}{text}{Colors.RESET}"
 
 def print_header(title: str, icon: str = "", color: str = Colors.CYAN):
-    """Print a formatted header with icon and color"""
-    line = "=" * 80
-    print(f"\n{colorize(line, color)}")
-    header_text = f"{icon} {title}" if icon else title
-    print(f"{colorize(header_text.center(80), color, bold=True)}")
-    print(f"{colorize(line, color)}")
+    """Print a formatted header."""
+    header_line = "=" * 80
+    title_line = f"{icon} {title}" if icon else title
+    print(f"\n{colorize(header_line, color)}")
+    print(f"{colorize(title_line.center(80), color, bold=True)}")
+    print(f"{colorize(header_line, color)}")
 
 def print_section(title: str, content: str, icon: str = "", color: str = Colors.WHITE):
-    """Print a formatted section with title and content"""
-    section_title = f"{icon} {title}" if icon else title
-    print(f"\n{colorize(section_title, color, bold=True)}")
-    print(f"{colorize('-' * 60, Colors.DIM)}")
+    """Print a formatted section with title and content."""
+    title_line = f"{icon} {title}" if icon else title
+    print(f"{colorize(title_line, color, bold=True)}")
+    print(f"{colorize('-' * 60, color)}")
     print(content)
 
-def print_phase_info(phase: str):
-    """Print phase information with appropriate styling"""
-    phase_colors = {
-        "initial": Colors.BLUE,
-        "verification": Colors.GREEN,
-        "auto": Colors.YELLOW
-    }
-    
-    phase_descriptions = {
-        "initial": "INITIAL ANALYSIS - Tool identification and task planning",
-        "verification": "COMPLETION VERIFICATION - Task verification and status assessment",
-        "auto": "AUTO-DETECTION - System will determine the appropriate phase"
-    }
-    
-    color = phase_colors.get(phase, Colors.WHITE)
-    description = phase_descriptions.get(phase, "Unknown phase")
-    
-    print(f"{colorize(Icons.PHASE, color)} {colorize('Phase:', Colors.WHITE, bold=True)} {colorize(description, color)}")
-
 def print_config_info(max_tokens: int, temperature: float):
-    """Print configuration information"""
+    """Print configuration information."""
     print(f"{colorize(Icons.CONFIG, Colors.CYAN)} {colorize('Config:', Colors.WHITE, bold=True)} "
           f"{colorize('max_tokens=', Colors.CYAN)}{colorize(str(max_tokens), Colors.WHITE)} "
           f"{colorize('temperature=', Colors.CYAN)}{colorize(str(temperature), Colors.WHITE)}")
 
 def extract_structured_response(response_text: str) -> dict:
     """
-    Extract structured sections from the LLM response.
+    Extract reasoning and plan sections from the response.
     
     Args:
-        response_text (str): The full LLM response
+        response_text (str): Raw response text from the server
         
     Returns:
-        dict: Dictionary with think, reasoning, and plan sections
+        dict: Dictionary with 'reasoning' and 'plan' keys
     """
-    sections = {
-        'think': '',
-        'reasoning': '',
-        'plan': ''
-    }
+    result = {"reasoning": "", "plan": ""}
     
-    # Regular expressions to extract sections
-    patterns = {
-        'think': r'<think>(.*?)</think>',
-        'reasoning': r'<reasoning>(.*?)</reasoning>',
-        'plan': r'<plan>(.*?)</plan>'
-    }
+    # Extract reasoning section
+    reasoning_match = re.search(r'<reasoning>(.*?)</reasoning>', response_text, re.DOTALL | re.IGNORECASE)
+    if reasoning_match:
+        result["reasoning"] = reasoning_match.group(1).strip()
     
-    for section, pattern in patterns.items():
-        match = re.search(pattern, response_text, re.DOTALL | re.IGNORECASE)
-        if match:
-            sections[section] = match.group(1).strip()
+    # Extract plan section
+    plan_match = re.search(r'<plan>(.*?)</plan>', response_text, re.DOTALL | re.IGNORECASE)
+    if plan_match:
+        result["plan"] = plan_match.group(1).strip()
     
-    return sections
+    # Fallback: if no XML tags found, use the entire response as reasoning
+    if not result["reasoning"] and not result["plan"]:
+        result["reasoning"] = response_text.strip()
+    
+    return result
 
-def extract_plan_commands(plan_text: str, phase: Optional[str] = None) -> List[str]:
+def extract_plan_commands(plan_text: str) -> List[str]:
     """
-    Extract plan commands and status from the plan section.
+    Extract individual robot commands from the plan text.
     
     Args:
-        plan_text (str): The plan section text
-        phase (str, optional): Current phase to determine which commands to extract
+        plan_text (str): Plan section text
         
     Returns:
-        list: List of extracted commands and status messages
+        List[str]: List of robot commands
     """
     commands = []
-    lines = plan_text.split('\n')
     
-    # Determine if we're in initial or verification phase based on content
-    is_initial_phase = True
-    if phase == "verification":
-        is_initial_phase = False
-    elif phase is None:  # Auto-detection
-        # Check if the response contains completion verification language
-        verification_indicators = [
-            "Task completed successfully", "Task partially completed", 
-            "Task verification", "properly stored", "completion verification"
-        ]
-        if any(indicator.lower() in plan_text.lower() for indicator in verification_indicators):
-            # Look for initial commands too
-            initial_indicators = ["Grip a tweezer", "Grip a straight scissor", "Grip"]
-            has_initial_commands = any(indicator in plan_text for indicator in initial_indicators)
-            
-            # If we have both, prioritize initial commands unless they're clearly about verification
-            if has_initial_commands:
-                is_initial_phase = True
-            else:
-                is_initial_phase = False
+    # Split by lines and filter out empty lines
+    lines = [line.strip() for line in plan_text.split('\n') if line.strip()]
     
     for line in lines:
-        line = line.strip()
-        if line:
-            if is_initial_phase:
-                # Look for exact command patterns - be more flexible with line detection
-                line_lower = line.lower()
-                
-                # Check for tweezer command
-                if ("grip a tweezer" in line_lower and "put it in the box" in line_lower) or \
-                   line.strip() == "Grip a tweezer and put it in the box.":
-                    commands.append("Grip a tweezer and put it in the box.")
-                
-                # Check for scissor command  
-                elif ("grip a straight scissor" in line_lower and "put it in the box" in line_lower) or \
-                     line.strip() == "Grip a straight scissor and put it in the box.":
-                    commands.append("Grip a straight scissor and put it in the box.")
-                
-                # Check for no tools detected
-                elif "no surgical tools detected" in line_lower and "tray" in line_lower:
-                    commands.append("No surgical tools detected on the tray.")
-                
-                # Handle cases where commands might be on one line separated by periods or other separators
-                elif "grip a tweezer" in line_lower and "grip a straight scissor" in line_lower:
-                    # Split commands that are on the same line
-                    if "grip a tweezer" in line_lower:
-                        commands.append("Grip a tweezer and put it in the box.")
-                    if "grip a straight scissor" in line_lower:
-                        commands.append("Grip a straight scissor and put it in the box.")
-                
-            else:
-                # Extract verification status only
-                verification_patterns = [
-                    "Task completed successfully", "Task partially completed", 
-                    "Task verification failed"
-                ]
-                if any(pattern in line for pattern in verification_patterns):
-                    clean_cmd = line.strip('- "').strip()
-                    if clean_cmd:
-                        commands.append(clean_cmd)
+        # Look for grip commands
+        if "grip" in line.lower() and ("scissor" in line.lower() or "tweezer" in line.lower()):
+            commands.append(line)
     
-    # Remove duplicates while preserving order
-    seen = set()
-    unique_commands = []
-    for cmd in commands:
-        if cmd not in seen:
-            seen.add(cmd)
-            unique_commands.append(cmd)
-    
-    return unique_commands
+    return commands
 
 def print_commands(commands: List[str]):
-    """Print extracted commands with appropriate icons and colors"""
+    """Print robot commands with appropriate icons."""
     if not commands:
-        print(f"{colorize(Icons.INFO, Colors.YELLOW)} No actionable commands found in response")
+        print(f"{colorize('No robot commands found in response.', Colors.YELLOW)}")
         return
     
-    print_section("EXTRACTED ROBOT COMMANDS", "", Icons.GEAR, Colors.MAGENTA)
-    
-    for i, cmd in enumerate(commands, 1):
-        # Determine command type and appropriate styling
-        if "Grip a tweezer" in cmd:
-            icon = Icons.TWEEZERS
-            color = Colors.BLUE
-        elif "Grip a straight scissor" in cmd or "Grip a scissor" in cmd:
+    for i, command in enumerate(commands, 1):
+        # Determine icon based on command content
+        if "scissor" in command.lower():
             icon = Icons.SCISSORS
-            color = Colors.BLUE
-        elif "Task completed successfully" in cmd:
-            icon = Icons.SUCCESS
-            color = Colors.GREEN
-        elif "Task partially completed" in cmd:
-            icon = Icons.WARNING
-            color = Colors.YELLOW
-        elif "Task verification failed" in cmd:
-            icon = Icons.ERROR
-            color = Colors.RED
-        elif "No surgical tools" in cmd:
-            icon = Icons.INFO
-            color = Colors.CYAN
+        elif "tweezer" in command.lower():
+            icon = Icons.TWEEZERS
         else:
-            icon = Icons.BULLET
-            color = Colors.WHITE
+            icon = Icons.ARROW
         
-        print(f"{colorize(f'{i}.', Colors.DIM)} {colorize(icon, color)} {colorize(cmd, color)}")
+        print(f"{colorize(f'{i}.', Colors.CYAN)} {colorize(icon, Colors.YELLOW)} {colorize(command, Colors.WHITE)}")
 
-def print_structured_response(response_text: str, phase: Optional[str] = None):
-    """Print the structured response with colors and formatting"""
+def print_structured_response(response_text: str):
+    """
+    Parse and print the structured response from the server.
+    
+    Args:
+        response_text (str): Raw response text from the server
+    """
+    # Extract structured sections
     sections = extract_structured_response(response_text)
     
-    # Print thinking section
-    if sections['think']:
-        print_section("THINKING PROCESS", sections['think'], Icons.THINKING, Colors.BLUE)
-    
     # Print reasoning section
-    if sections['reasoning']:
-        print_section("REASONING & ANALYSIS", sections['reasoning'], Icons.ANALYSIS, Colors.YELLOW)
+    if sections["reasoning"]:
+        print_section("REASONING & ANALYSIS", sections["reasoning"], Icons.ANALYSIS, Colors.CYAN)
     
-    # Print plan section
-    if sections['plan']:
-        print_section("EXECUTION PLAN", sections['plan'], Icons.PLAN, Colors.GREEN)
+    # Print plan section with command extraction
+    if sections["plan"]:
+        print_section("EXECUTION PLAN", sections["plan"], Icons.PLAN, Colors.CYAN)
         
-        # Extract and display commands with phase context
-        commands = extract_plan_commands(sections['plan'], phase)
+        # Extract and display commands
+        commands = extract_plan_commands(sections["plan"])
         if commands:
-            print()  # Add spacing
+            print(f"\n{colorize('Robot Commands:', Colors.MAGENTA, bold=True)}")
             print_commands(commands)
     
-    # If no structured sections found, print the raw response
-    if not any(sections.values()):
-        print_section("RAW RESPONSE", response_text, Icons.INFO, Colors.WHITE)
+    # If no structured sections found, print raw response
+    if not sections["reasoning"] and not sections["plan"]:
+        print_section("RAW RESPONSE", response_text, Icons.INFO, Colors.YELLOW)
 
 def send_request(image_path: str, user_message: Optional[str] = None, 
                 system_message: Optional[str] = None, server_url: str = "http://localhost:8000", 
-                phase: Optional[str] = None, max_tokens: int = 1024, temperature: float = 0.0,
+                max_tokens: int = 1024, temperature: float = 0.0,
                 use_base64: bool = False):
     """
-    Send a request to the LLM server for surgical tool analysis.
+    Send analysis request to the server.
     
     Args:
         image_path (str): Path to the image file
-        user_message (str, optional): Custom user message. Defaults to None.
-        system_message (str, optional): Custom system message. Defaults to None.
-        server_url (str): Server URL. Defaults to "http://localhost:8000".
-        phase (str, optional): Operation phase - "initial", "verification", or None for auto-detection.
-        max_tokens (int): Maximum tokens for response generation. Defaults to 1024.
-        temperature (float): Temperature for response generation. Defaults to 0.0.
-        use_base64 (bool): If True, encode image as base64 and send in request body. Defaults to False.
+        user_message (str, optional): Custom user message
+        system_message (str, optional): Custom system message
+        server_url (str): Server URL
+        max_tokens (int): Maximum tokens for response
+        temperature (float): Temperature for response generation
+        use_base64 (bool): Whether to encode image as base64
     """
-    
-    # Check if image file exists
-    if not os.path.exists(image_path):
-        print(f"{colorize(Icons.ERROR, Colors.RED)} {colorize('Error:', Colors.RED, bold=True)} Image file does not exist: {image_path}")
-        sys.exit(1)
-    
-    # Generate phase-specific user message if phase is specified and no custom user message provided
-    if phase and not user_message:
-        if phase == "initial":
-            user_message = (
-                "Analyze this surgical room image for INITIAL TASK PLANNING. "
-                "Identify surgical tools on the white foam board that need to be moved to the tool box. "
-                "Generate appropriate movement commands for the SOARM 101 robotic arm."
-            )
-        elif phase == "verification":
-            user_message = (
-                "Analyze this surgical room image for COMPLETION VERIFICATION. "
-                "Verify that surgical tools have been properly stored in the metal tool box "
-                "and confirm the white foam board is clear of surgical instruments. "
-                "Provide task completion status assessment."
-            )
-    
-    # Print phase and configuration information
-    if phase:
-        print_phase_info(phase)
-    else:
-        print_phase_info("auto")
-    
+    # Print configuration
     print_config_info(max_tokens, temperature)
     
     # Prepare request data
@@ -323,24 +201,21 @@ def send_request(image_path: str, user_message: Optional[str] = None,
         "temperature": temperature
     }
     
-    # Handle image input - either file path or base64 encoding
+    # Handle image encoding
     if use_base64:
-        # Encode image as base64 for remote server
+        # Read and encode image as base64
         try:
             with open(image_path, "rb") as image_file:
-                image_data = base64.b64encode(image_file.read()).decode('utf-8')
-                request_data["image_base64"] = image_data
-                print(f"{colorize(Icons.INFO, Colors.CYAN)} Image encoded as base64 ({len(image_data)} chars)")
+                image_data = image_file.read()
+                base64_encoded = base64.b64encode(image_data).decode('utf-8')
+                request_data["image_base64"] = base64_encoded
+                print(f"{colorize(Icons.INFO, Colors.CYAN)} Image encoded as base64: {len(base64_encoded)} characters")
         except Exception as e:
             print(f"{colorize(Icons.ERROR, Colors.RED)} Failed to encode image: {e}")
-            sys.exit(1)
+            return
     else:
         # Use file path for local server
         request_data["image_path"] = image_path
-    
-    # Add phase if specified
-    if phase:
-        request_data["phase"] = phase
     
     # Use custom messages if provided
     if user_message:
@@ -363,20 +238,18 @@ def send_request(image_path: str, user_message: Optional[str] = None,
             result = response.json()
             
             # Print header
-            print_header("SURGICAL SCRUB NURSE ANALYSIS RESULT", Icons.MEDICAL, Colors.GREEN)
+            print_header("SURGICAL ENVIRONMENT ANALYSIS RESULT", Icons.MEDICAL, Colors.GREEN)
             
             # Print server configuration info if available
             if "config" in result:
                 config = result["config"]
-                phase_info = f"{colorize('phase=', Colors.CYAN)}{colorize(str(config.get('phase', 'unknown')), Colors.WHITE)} " if 'phase' in config else ""
                 print(f"\n{colorize(Icons.CONFIG, Colors.CYAN)} {colorize('Server Config:', Colors.WHITE, bold=True)} "
-                      f"{phase_info}"
                       f"{colorize('max_tokens=', Colors.CYAN)}{colorize(str(config.get('max_tokens', 'unknown')), Colors.WHITE)} "
                       f"{colorize('temperature=', Colors.CYAN)}{colorize(str(config.get('temperature', 'unknown')), Colors.WHITE)} "
                       f"{colorize('actual_tokens=', Colors.CYAN)}{colorize(str(config.get('actual_tokens', 'unknown')), Colors.WHITE)}")
             
-            # Print structured response with phase context
-            print_structured_response(result["response"], phase)
+            # Print structured response
+            print_structured_response(result["response"])
             
             # Print footer
             print(f"\n{colorize('=' * 80, Colors.GREEN)}")
@@ -425,10 +298,6 @@ def main():
   {colorize('Basic usage:', Colors.WHITE)}
     python surgical_env_analyze.py image.jpg
   
-  {colorize('Phase-specific analysis:', Colors.WHITE)}
-    python surgical_env_analyze.py image.jpg --phase initial
-    python surgical_env_analyze.py image.jpg --phase verification
-  
   {colorize('Custom token limits:', Colors.WHITE)}
     python surgical_env_analyze.py image.jpg --max-tokens 2048
     python surgical_env_analyze.py image.jpg --max-tokens 4096 --temperature 0.2
@@ -440,7 +309,7 @@ def main():
     python surgical_env_analyze.py image.jpg --server http://remote-server:8000 --use-base64
   
   {colorize('Full configuration:', Colors.WHITE)}
-    python surgical_env_analyze.py image.jpg --phase initial --max-tokens 2048 --temperature 0.1
+    python surgical_env_analyze.py image.jpg --max-tokens 2048 --temperature 0.1
         """
     )
     
@@ -463,13 +332,6 @@ def main():
     parser.add_argument(
         "--system-file", "-sf",
         help="Load system message from file (optional)",
-        default=None
-    )
-    
-    parser.add_argument(
-        "--phase", "-p",
-        choices=["initial", "verification"],
-        help="Operation phase: 'initial' for task planning, 'verification' for completion check",
         default=None
     )
     
@@ -530,7 +392,7 @@ def main():
     
     # Send request
     send_request(args.image_path, args.message, system_message, args.server, 
-                args.phase, max_tokens, temperature, args.use_base64)
+                max_tokens, temperature, args.use_base64)
 
 if __name__ == "__main__":
     main() 
