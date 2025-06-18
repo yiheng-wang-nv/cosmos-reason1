@@ -6,5 +6,5 @@ python surgical_env_analyze.py debug_images/demo_input.png \
 --phase initial \
 --system-file system_message_analyze.txt \
 --message "$(cat user_message_analyze.txt)" \
---max-tokens 512 \
+--max-tokens 256 \
 --temperature 0.0
