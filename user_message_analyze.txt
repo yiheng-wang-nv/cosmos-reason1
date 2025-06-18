@@ -1,0 +1,14 @@
+Analyze surgical environment IMAGE. SOARM 101 scrub nurse task: Clean the surgical tray by organizing surgical tools.
+
+TASK: Move ONLY metal surgical tools from surgical tray (white foam board) to surgical tool box (metal box).
+IGNORE: plastic scissors, watches, office items (leave on tray).
+
+REQUIRED: 
+- Reasoning: Identify metal surgical tools on tray, describe SOARM 101 actions needed
+- Plan: ONLY grip commands for metal surgical tools found, each on separate line
+
+Commands (only for surgical tools ON tray):
+"Grip a straight scissor and put it in the box."
+"Grip a tweezer and put it in the box."
+
+BE EXTREMELY BRIEF. 

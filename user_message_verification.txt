@@ -1,0 +1,19 @@
+Verify SOARM 101 surgical tray cleaning completion. Check if METAL surgical tools are in the metal box.
+
+TASK COMPLETED IF:
+- Metal scissors are INSIDE metal tool box
+- Metal tweezers are INSIDE metal tool box  
+- Only plastic scissors, watches, office items remain on tray
+
+REQUIRED: 
+- Reasoning: Examine tool locations, assess task completion
+- Plan: Status message based on task completion
+
+Status messages:
+"Tray cleaning completed successfully. All surgical tools organized in surgical tool box."
+"Surgical tools still remain on tray: [specific tools]"
+"Surgical tools not properly stored in box: [specific tools]"
+
+FOCUS: Only verify surgical tools organization (scissors, tweezers).
+
+BE EXTREMELY BRIEF. 
