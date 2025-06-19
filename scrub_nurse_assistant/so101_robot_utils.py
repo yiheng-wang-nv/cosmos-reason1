@@ -11,7 +11,15 @@ python so101_robot_utils.py \
     --port 5555 \
     --port_follower /dev/ttyACM1 \
     --task_description "Grip a straight scissor and put it in the box." \
-    --actions_to_execute 20 \
+    --actions_to_execute 15 \
+    --monitor_cameras
+
+python so101_robot_utils.py \
+    --host 127.0.0.1 \
+    --port 5555 \
+    --port_follower /dev/ttyACM1 \
+    --task_description "Grip a tweezer and put it in the box." \
+    --actions_to_execute 15 \
     --monitor_cameras
 """
 
@@ -279,77 +287,8 @@ class Gr00tSO101InferenceClient:
         print(f"Task updated: {instruction}")
 
 
-def create_video_from_images(image_dir: str, camera_name: str, fps: int = 10):
-    """Create video from saved images."""
-    image_files = sorted([f for f in os.listdir(image_dir) if f.startswith(f'{camera_name}_') and f.endswith('.jpg')])
-    
-    if not image_files:
-        print(f"No images found for camera {camera_name}")
-        return
-    
-    # Read first image to get dimensions
-    first_img = cv2.imread(os.path.join(image_dir, image_files[0]))
-    height, width, _ = first_img.shape
-    
-    # Create video writer
-    video_path = os.path.join(image_dir, f'{camera_name}_video.mp4')
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    video_writer = cv2.VideoWriter(video_path, fourcc, fps, (width, height))
-    
-    print(f"Creating video for {camera_name} camera with {len(image_files)} frames...")
-    
-    for image_file in tqdm(image_files, desc=f"Processing {camera_name} video"):
-        img = cv2.imread(os.path.join(image_dir, image_file))
-        video_writer.write(img)
-    
-    video_writer.release()
-    print(f"Video saved: {video_path}")
-
-
-def create_side_by_side_video(image_dir: str, fps: int = 10):
-    """Create side-by-side video from both camera images."""
-    wrist_files = sorted([f for f in os.listdir(image_dir) if f.startswith('wrist_') and f.endswith('.jpg')])
-    room_files = sorted([f for f in os.listdir(image_dir) if f.startswith('room_') and f.endswith('.jpg')])
-    
-    if not wrist_files or not room_files:
-        print("Missing images from one or both cameras for side-by-side video")
-        return
-    
-    min_frames = min(len(wrist_files), len(room_files))
-    
-    # Read first images to get dimensions
-    wrist_img = cv2.imread(os.path.join(image_dir, wrist_files[0]))
-    room_img = cv2.imread(os.path.join(image_dir, room_files[0]))
-    
-    height = max(wrist_img.shape[0], room_img.shape[0])
-    width = wrist_img.shape[1] + room_img.shape[1]
-    
-    # Create video writer
-    video_path = os.path.join(image_dir, 'combined_video.mp4')
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    video_writer = cv2.VideoWriter(video_path, fourcc, fps, (width, height))
-    
-    print(f"Creating side-by-side video with {min_frames} frames...")
-    
-    for i in tqdm(range(min_frames), desc="Processing combined video"):
-        wrist_img = cv2.imread(os.path.join(image_dir, wrist_files[i]))
-        room_img = cv2.imread(os.path.join(image_dir, room_files[i]))
-        
-        # Resize images to same height if needed
-        if wrist_img.shape[0] != room_img.shape[0]:
-            target_height = min(wrist_img.shape[0], room_img.shape[0])
-            wrist_img = cv2.resize(wrist_img, (int(wrist_img.shape[1] * target_height / wrist_img.shape[0]), target_height))
-            room_img = cv2.resize(room_img, (int(room_img.shape[1] * target_height / room_img.shape[0]), target_height))
-        
-        # Combine images side by side
-        combined_img = np.hstack([wrist_img, room_img])
-        video_writer.write(combined_img)
-    
-    video_writer.release()
-    print(f"Side-by-side video saved: {video_path}")
-
-
-def main():
+def setup_arg_parser():
+    """Sets up and returns the argument parser."""
     parser = argparse.ArgumentParser(description="SO101 GR00T Policy Evaluation")
     
     # GR00T server connection
@@ -373,21 +312,11 @@ def main():
     parser.add_argument("--video_fps", type=int, default=15, help="FPS for created videos")
     parser.add_argument("--output_dir", type=str, default="eval_so101_images", help="Output directory for images")
     parser.add_argument("--monitor_cameras", action="store_true", help="Display live camera feeds in windows")
-    
-    args = parser.parse_args()
+    return parser
 
-    print(f"Task: {args.task_description}")
-    print(f"Actions to execute: {args.actions_to_execute}")
-    print(f"Action horizon: {args.action_horizon}")
 
-    # Initialize GR00T client
-    client = Gr00tSO101InferenceClient(
-        host=args.host,
-        port=args.port,
-        language_instruction=args.task_description
-    )
-
-    # Setup image recording if requested
+def setup_image_recording(args):
+    """Sets up the directory for image recording if requested."""
     if args.record_images:
         os.makedirs(args.output_dir, exist_ok=True)
         # Clear existing images
@@ -396,125 +325,181 @@ def main():
                 os.remove(os.path.join(args.output_dir, file))
         print(f"Recording images to: {args.output_dir}")
 
-    # Initialize robot
+
+def run_camera_preview(robot: SO101Robot) -> bool:
+    """
+    Runs a camera preview loop.
+    Returns True if the user wants to start, False if they want to quit.
+    """
+    print("\nCamera preview is active.")
+    print("Check the camera windows. Press 's' to start policy execution, or 'q' to quit.")
+    while True:
+        img_preview, img_room_preview = robot.get_current_img()
+        
+        # Convert to BGR for OpenCV display
+        img_wrist_bgr = cv2.cvtColor(img_preview, cv2.COLOR_RGB2BGR)
+        img_room_bgr = cv2.cvtColor(img_room_preview, cv2.COLOR_RGB2BGR)
+
+        cv2.imshow("Wrist Camera", img_wrist_bgr)
+        cv2.imshow("Room Camera", img_room_bgr)
+
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('s'):
+            print("Starting policy execution...")
+            return True
+        elif key == ord('q'):
+            print("Quitting application from preview.")
+            return False
+
+
+def execute_policy_loop(robot: SO101Robot, client: Gr00tSO101InferenceClient, args) -> int:
+    """
+    Contains the main policy execution loop.
+    Returns the final count of images recorded.
+    """
+    image_count = 0
+    MODALITY_KEYS = ["single_arm", "gripper"]
+    execution_stopped = False
+
+    for i in tqdm(range(args.actions_to_execute), desc="Executing actions"):
+        # Get current observation for the policy
+        img, img_room = robot.get_current_img()
+        state = robot.get_current_state()
+        
+        # Get action from policy
+        action_start_time = time.time()
+        action = client.get_action(img, img_room, state)
+        
+        # Execute action chunk
+        execution_start_time = time.time()
+        for j in range(args.action_horizon):
+            # Concatenate action components
+            concat_action = np.concatenate([
+                np.atleast_1d(action[f"action.{key}"][j]) 
+                for key in MODALITY_KEYS
+            ], axis=0)
+            
+            assert concat_action.shape == (6,), f"Expected (6,) but got {concat_action.shape}"
+            
+            # Send to robot
+            robot.set_target_state(torch.from_numpy(concat_action))
+            time.sleep(0.1)  # Small delay between actions
+            
+            # Get a fresh frame for monitoring and saving
+            live_img, live_img_room = robot.get_current_img()
+            
+            # Save images if recording
+            if args.record_images:
+                # Resize and save wrist camera image
+                img_wrist_save = cv2.resize(live_img, (320, 240))
+                img_wrist_bgr = cv2.cvtColor(img_wrist_save, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(f"{args.output_dir}/wrist_{image_count:06d}.jpg", img_wrist_bgr)
+                
+                # Resize and save room camera image
+                img_room_save = cv2.resize(live_img_room, (320, 240))
+                img_room_bgr = cv2.cvtColor(img_room_save, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(f"{args.output_dir}/room_{image_count:06d}.jpg", img_room_bgr)
+                
+                image_count += 1
+            
+            # Display camera feeds if monitoring is enabled
+            if args.monitor_cameras:
+                img_wrist_bgr = cv2.cvtColor(live_img, cv2.COLOR_RGB2BGR)
+                img_room_bgr = cv2.cvtColor(live_img_room, cv2.COLOR_RGB2BGR)
+                cv2.imshow("Wrist Camera", img_wrist_bgr)
+                cv2.imshow("Room Camera", img_room_bgr)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    print("'q' pressed, stopping execution.")
+                    execution_stopped = True
+                    break
+        
+        if execution_stopped:
+            break
+
+        action_time = time.time() - action_start_time
+        execution_time = time.time() - execution_start_time
+        
+        if i % 10 == 0:  # Print every 10 steps
+            print(f"Step {i}: Action time: {action_time:.3f}s, "
+                  f"Execution time: {execution_time:.3f}s")
+    
+    return image_count
+
+
+def run_post_execution_monitoring(robot: SO101Robot):
+    """Runs a final monitoring loop until the user quits."""
+    if hasattr(robot, 'is_connected') and robot.is_connected and robot.enable_camera:
+        print("\nPost-execution monitoring. Robot should be in its final state.")
+        print("Press 'q' in a camera window to close and exit.")
+        while True:
+            try:
+                live_img, live_img_room = robot.get_current_img()
+                img_wrist_bgr = cv2.cvtColor(live_img, cv2.COLOR_RGB2BGR)
+                img_room_bgr = cv2.cvtColor(live_img_room, cv2.COLOR_RGB2BGR)
+                cv2.imshow("Wrist Camera", img_wrist_bgr)
+                cv2.imshow("Room Camera", img_room_bgr)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    print("Exiting post-execution monitoring.")
+                    break
+            except Exception as e:
+                print(f"Error during post-execution monitoring: {e}. Exiting this loop.")
+                break 
+    else:
+        print("Skipping post-execution monitoring as robot is not connected or cameras are not enabled.")
+
+
+def main():
+    parser = setup_arg_parser()
+    args = parser.parse_args()
+
+    print(f"Task: {args.task_description}")
+    print(f"Actions to execute: {args.actions_to_execute}")
+    print(f"Action horizon: {args.action_horizon}")
+
+    # Initialize components
+    client = Gr00tSO101InferenceClient(
+        host=args.host,
+        port=args.port,
+        language_instruction=args.task_description
+    )
     robot = SO101Robot(
         port_follower=args.port_follower,
         calibrate=args.calibrate,
         enable_camera=True,
     )
-
-    image_count = 0
-    MODALITY_KEYS = ["single_arm", "gripper"]
+    setup_image_recording(args)
 
     try:
         with robot.activate():
-            # --- Start camera preview if requested ---
+            # Optional camera preview before starting
             if args.monitor_cameras:
-                print("\nCamera preview is active.")
-                print("Check the camera windows. Press 's' to start policy execution, or 'q' to quit.")
-                while True:
-                    img_preview, img_room_preview = robot.get_current_img()
-                    
-                    # Convert to BGR for OpenCV display
-                    img_wrist_bgr = cv2.cvtColor(img_preview, cv2.COLOR_RGB2BGR)
-                    img_room_bgr = cv2.cvtColor(img_room_preview, cv2.COLOR_RGB2BGR)
+                should_continue = run_camera_preview(robot)
+                if not should_continue:
+                    return
 
-                    cv2.imshow("Wrist Camera", img_wrist_bgr)
-                    cv2.imshow("Room Camera", img_room_bgr)
-
-                    key = cv2.waitKey(1) & 0xFF
-                    if key == ord('s'):
-                        print("Starting policy execution...")
-                        break
-                    elif key == ord('q'):
-                        print("Quitting application from preview.")
-                        return  # Exit main function
-            else:
-                print("Starting policy execution...")
-            
-            for i in tqdm(range(args.actions_to_execute), desc="Executing actions"):
-                # Get current observation
-                img, img_room = robot.get_current_img()
-                state = robot.get_current_state()
-                
-                # Get action from policy
-                action_start_time = time.time()
-                action = client.get_action(img, img_room, state)
-                
-                # Execute action chunk
-                execution_start_time = time.time()
-                for j in range(args.action_horizon):
-                    # Concatenate action components
-                    concat_action = np.concatenate([
-                        np.atleast_1d(action[f"action.{key}"][j]) 
-                        for key in MODALITY_KEYS
-                    ], axis=0)
-                    
-                    assert concat_action.shape == (6,), f"Expected (6,) but got {concat_action.shape}"
-                    
-                    # Send to robot
-                    robot.set_target_state(torch.from_numpy(concat_action))
-                    time.sleep(0.1)  # Small delay between actions
-                    
-                    # Update display
-                    img, img_room = robot.get_current_img()
-                    
-                    # Save images if recording
-                    if args.record_images:
-                        # Resize and save wrist camera image
-                        img_wrist_save = cv2.resize(img, (320, 240))
-                        img_wrist_bgr = cv2.cvtColor(img_wrist_save, cv2.COLOR_RGB2BGR)
-                        cv2.imwrite(f"{args.output_dir}/wrist_{image_count:06d}.jpg", img_wrist_bgr)
-                        
-                        # Resize and save room camera image
-                        img_room_save = cv2.resize(img_room, (320, 240))
-                        img_room_bgr = cv2.cvtColor(img_room_save, cv2.COLOR_RGB2BGR)
-                        cv2.imwrite(f"{args.output_dir}/room_{image_count:06d}.jpg", img_room_bgr)
-                        
-                        image_count += 1
-                
-                # Display camera feeds if monitoring is enabled
-                if args.monitor_cameras:
-                    img_wrist_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-                    img_room_bgr = cv2.cvtColor(img_room, cv2.COLOR_RGB2BGR)
-                    cv2.imshow("Wrist Camera", img_wrist_bgr)
-                    cv2.imshow("Room Camera", img_room_bgr)
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        print("'q' pressed, stopping execution.")
-                        break
-
-                action_time = time.time() - action_start_time
-                execution_time = time.time() - execution_start_time
-                
-                if i % 10 == 0:  # Print every 10 steps
-                    print(f"Step {i}: Action time: {action_time:.3f}s, "
-                          f"Execution time: {execution_time:.3f}s")
-
-            print("Policy execution completed!")
+            # Run the main policy execution
+            image_count = execute_policy_loop(robot, client, args)
+            print("\nPolicy execution completed!")
             
             # Return to home position
             print("Returning to home position...")
             robot.go_home()
             
-            if args.record_images:
-                print(f"Saved {image_count} images from each camera to {args.output_dir}")
-                
-                # Create videos if requested
-                if args.create_videos:
-                    print("Creating videos from saved images...")
-                    create_video_from_images(args.output_dir, "wrist", args.video_fps)
-                    create_video_from_images(args.output_dir, "room", args.video_fps)
-                    create_side_by_side_video(args.output_dir, args.video_fps)
-                    print("Video creation completed!")
+            # Final monitoring phase
+            if args.monitor_cameras:
+                run_post_execution_monitoring(robot)
 
     except KeyboardInterrupt:
         print("\nExecution interrupted by user")
     except Exception as e:
-        print(f"Error during execution: {e}")
-        raise
+        print(f"\nAn error occurred during execution: {e}")
+        # In a real app, you might use logging.exception(e) for a full traceback
+        # For this script, we'll proceed to the finally block for cleanup.
     finally:
-        print("Cleaning up...")
-        if args.monitor_cameras:
+        print("Cleaning up and closing windows...")
+        # The 'with' statement ensures robot.disconnect() is called.
+        # We just need to close the windows.
+        if 'args' in locals() and args.monitor_cameras:
             cv2.destroyAllWindows()
 
 
