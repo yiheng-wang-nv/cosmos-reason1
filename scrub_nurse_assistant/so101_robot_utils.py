@@ -5,8 +5,6 @@ SO101 Real Robot Evaluation Script for GR00T Policy
 Based on eval_gr00t_so100.py but adapted for SO101 robot.
 This script connects to a GR00T inference server and runs policy evaluation on SO101.
 
-Also includes analysis methods for surgical environment analysis.
-
 Usage:
     # Start GR00T server first:
     python scripts/inference_service.py --server \
@@ -32,7 +30,6 @@ import argparse
 import os
 import time
 from contextlib import contextmanager
-from datetime import datetime
 
 import cv2
 import matplotlib.pyplot as plt
@@ -44,28 +41,20 @@ from lerobot.common.robot_devices.robots.configs import So101RobotConfig
 from lerobot.common.robot_devices.robots.utils import make_robot_from_config
 from lerobot.common.robot_devices.utils import RobotDeviceAlreadyConnectedError
 from tqdm import tqdm
-from PIL import Image
-from typing import Optional
 
 # Import GR00T client
-try:
-    from gr00t.eval.service import ExternalRobotInferenceClient
-    GROOT_AVAILABLE = True
-except ImportError:
-    GROOT_AVAILABLE = False
+from gr00t.eval.service import ExternalRobotInferenceClient
 
 
 class SO101Robot:
-    """SO101 Robot controller for GR00T policy evaluation and surgical analysis."""
+    """SO101 Robot controller for GR00T policy evaluation."""
     
     def __init__(self, port_follower: str = "/dev/ttyACM1", calibrate: bool = False, 
-                 enable_camera: bool = True, camera_indices: tuple = (0, 2),
-                 enable_robot_control: bool = True):
+                 enable_camera: bool = True):
         self.config = So101RobotConfig()
         self.calibrate = calibrate
         self.enable_camera = enable_camera
-        self.enable_robot_control = enable_robot_control
-        self.cam_idx = camera_indices
+        self.cam_idx = (0, 2)
         self.port_follower = port_follower
         
         # Configure robot
@@ -87,15 +76,11 @@ class SO101Robot:
                 )
             }
         
-        if self.enable_robot_control:
-            # Inference mode: no leader arms needed
-            self.config.leader_arms = {}
-            # Set follower arm port
-            self.config.follower_arms["main"].port = port_follower
-        else:
-            # Camera only mode - disable robot control
-            self.config.follower_arms = {}
-            self.config.leader_arms = {}
+        # Inference mode: no leader arms needed
+        self.config.leader_arms = {}
+        
+        # Set follower arm port
+        self.config.follower_arms["main"].port = port_follower
         
         # Remove calibration folder if requested
         if self.calibrate:
@@ -107,15 +92,14 @@ class SO101Robot:
         
         # Create the robot
         self.robot = make_robot_from_config(self.config)
-        self.motor_bus = self.robot.follower_arms["main"] if self.enable_robot_control else None
+        self.motor_bus = self.robot.follower_arms["main"]
 
     @contextmanager
     def activate(self):
         """Context manager for robot activation."""
         try:
             self.connect()
-            if self.enable_robot_control:
-                self.move_to_initial_pose()
+            self.move_to_initial_pose()
             yield
         finally:
             self.disconnect()
@@ -127,38 +111,35 @@ class SO101Robot:
                 "SO101Robot is already connected. Do not run `robot.connect()` twice."
             )
 
-        if self.enable_robot_control:
-            # Connect the motor bus
-            self.motor_bus.connect()
+        # Connect the motor bus
+        self.motor_bus.connect()
 
-            # Disable torque for calibration
-            self.motor_bus.write("Torque_Enable", TorqueMode.DISABLED.value)
+        # Disable torque for calibration
+        self.motor_bus.write("Torque_Enable", TorqueMode.DISABLED.value)
 
-            # Run calibration
-            self.robot.activate_calibration()
+        # Run calibration
+        self.robot.activate_calibration()
 
-            # Set robot preset
-            self.set_so101_robot_preset()
+        # Set robot preset
+        self.set_so101_robot_preset()
 
-            # Enable torque
-            self.motor_bus.write("Torque_Enable", TorqueMode.ENABLED.value)
-            print("SO101 present position:", self.motor_bus.read("Present_Position"))
-        
+        # Enable torque
+        self.motor_bus.write("Torque_Enable", TorqueMode.ENABLED.value)
+        print("SO101 present position:", self.motor_bus.read("Present_Position"))
         self.robot.is_connected = True
 
         # Connect camera
-        if self.enable_camera:
-            self.camera_wrist = self.robot.cameras["wrist"]
-            self.camera_room = self.robot.cameras["room"]
+        self.camera_wrist = self.robot.cameras["wrist"] if self.enable_camera else None
+        self.camera_room = self.robot.cameras["room"] if self.enable_camera else None
+        if self.camera_wrist is not None:
             self.camera_wrist.connect()
+        if self.camera_room is not None:
             self.camera_room.connect()
         
         print("================> SO101 Robot is fully connected =================")
 
     def set_so101_robot_preset(self):
         """Set SO101-specific motor configurations."""
-        if not self.enable_robot_control:
-            return
         # Mode=0 for Position Control
         self.motor_bus.write("Mode", 0)
         # Set P_Coefficient to lower value to avoid shakiness
@@ -174,9 +155,6 @@ class SO101Robot:
 
     def move_to_initial_pose(self):
         """Move robot to initial pose."""
-        if not self.enable_robot_control:
-            print("Robot control disabled - skipping pose movement")
-            return
         print("-------------------------------- Moving to initial pose")
         # SO101 initial pose (adjust these values as needed)
         initial_state = torch.tensor([8, 196, 180, 74, 95, 0], dtype=torch.float32)
@@ -185,9 +163,6 @@ class SO101Robot:
 
     def go_home(self):
         """Move robot to home pose."""
-        if not self.enable_robot_control:
-            print("Robot control disabled - skipping home movement")
-            return
         print("-------------------------------- Moving to home pose")
         # SO101 home pose (adjust these values as needed)
         home_state = torch.tensor([8, 196, 180, 74, 95, 0], dtype=torch.float32)
@@ -221,112 +196,21 @@ class SO101Robot:
             img_room = (img_room * 255).astype(np.uint8)
         return img, img_room
 
-    def capture_analysis_image(self, camera_name: str = "room") -> Optional[Image.Image]:
-        """
-        Capture image from specified camera for surgical environment analysis.
-        
-        Args:
-            camera_name (str): "wrist" or "room"
-            
-        Returns:
-            PIL.Image.Image: Captured image or None if failed
-        """
-        if not self.enable_camera:
-            print("Camera not enabled")
-            return None
-        
-        try:
-            print(f"Capturing image from {camera_name} camera...")
-            
-            # Get observation
-            obs = self.robot.capture_observation()
-            
-            # Get image from specified camera
-            if camera_name == "wrist":
-                img_tensor = obs["observation.images.wrist"]
-            elif camera_name == "room":
-                img_tensor = obs["observation.images.room"]
-            else:
-                print(f"Invalid camera name: {camera_name}")
-                return None
-            
-            # Convert tensor to numpy array
-            img_array = img_tensor.data.numpy()
-            
-            # Convert to HWC format if needed
-            if len(img_array.shape) == 3 and img_array.shape[0] == 3:  # CHW format
-                img_array = img_array.transpose(1, 2, 0)  # Convert to HWC
-            
-            # Ensure uint8
-            if img_array.dtype != np.uint8:
-                img_array = (img_array * 255).astype(np.uint8)
-            
-            # Convert to PIL Image
-            pil_image = Image.fromarray(img_array)
-            
-            # Save captured image with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            saved_filename = f"so101_{camera_name}_{timestamp}.jpg"
-            pil_image.save(saved_filename, quality=95)
-            
-            print(f"Image captured from {camera_name} camera")
-            print(f"  Resolution: {pil_image.size}")
-            print(f"  Saved as: {saved_filename}")
-            
-            return pil_image
-            
-        except Exception as e:
-            print(f"Failed to capture image: {e}")
-            return None
-
-    def execute_surgical_command(self, command: str):
-        """
-        Execute a surgical robot command (placeholder for future implementation).
-        
-        Args:
-            command (str): Robot command to execute
-        """
-        if not self.enable_robot_control:
-            print(f"Robot control disabled - command simulation only")
-            print(f"  Would execute: {command}")
-            return
-        
-        print(f"Executing surgical command: {command}")
-        # TODO: Implement actual command execution logic here
-        # This would involve translating text commands to robot actions
-        # For example:
-        # if "grip a straight scissor" in command.lower():
-        #     self.grip_scissor()
-        # elif "grip a tweezer" in command.lower():
-        #     self.grip_tweezer()
-        # elif "put it in the box" in command.lower():
-        #     self.place_in_box()
-        
-        print("Surgical command executed (placeholder)")
-        time.sleep(0.5)  # Simulate execution time
-
     def set_target_state(self, target_state: torch.Tensor):
         """Send target state to robot."""
-        if not self.enable_robot_control:
-            return
         self.robot.send_action(target_state)
 
     def enable(self):
         """Enable motor torque."""
-        if not self.enable_robot_control:
-            return
         self.motor_bus.write("Torque_Enable", TorqueMode.ENABLED.value)
 
     def disable(self):
         """Disable motor torque."""
-        if not self.enable_robot_control:
-            return
         self.motor_bus.write("Torque_Enable", TorqueMode.DISABLED.value)
 
     def disconnect(self):
         """Disconnect robot."""
-        if self.enable_robot_control:
-            self.disable()
+        self.disable()
         if self.robot.is_connected:
             self.robot.disconnect()
             self.robot.is_connected = False
@@ -343,9 +227,6 @@ class Gr00tSO101InferenceClient:
     
     def __init__(self, host: str = "localhost", port: int = 5555, 
                  language_instruction: str = "Pick up the object and place it in the box."):
-        if not GROOT_AVAILABLE:
-            raise ImportError("GR00T not available. Install gr00t package to use inference client.")
-        
         self.language_instruction = language_instruction
         self.policy = ExternalRobotInferenceClient(host=host, port=port)
         print(f"Connected to GR00T server at {host}:{port}")
@@ -490,7 +371,6 @@ def main():
         port_follower=args.port_follower,
         calibrate=args.calibrate,
         enable_camera=True,
-        enable_robot_control=True
     )
 
     image_count = 0
