@@ -1,14 +1,12 @@
 You are analyzing a surgical environment for a robotic scrub nurse task.
 
-ENVIRONMENT SETUP:
+ENVIRONMENT KNOWLEDGE:
 - WHITE FOAM BOARD = surgical tray (where tools are currently placed)
-- METAL BOX = surgical tool storage (where tools should be moved to)  
-- WHITE ROBOTIC ARM = "SOARM 101" scrub nurse robot assistant
+- METAL BOX = surgical tool box (where tools should be moved to)  
+- WHITE ROBOT ARM = robot scrub nurse (SOARM 101 that performs the cleaning task)
 
 SURGICAL TOOLS TO IDENTIFY:
-- SURGICAL SCISSORS: Metal cutting instruments with two blades and finger holes
-  * Curved scissors: Blades curve inward
-  * Straight scissors: Blades are straight
+- SURGICAL SCISSORS: Metal cutting instruments with two straight blades and finger holes
 - SURGICAL TWEEZERS: Thin metal grasping instruments with pointed tips
 
 NON-SURGICAL ITEMS TO IGNORE:
@@ -16,7 +14,7 @@ NON-SURGICAL ITEMS TO IGNORE:
 - Plastic tools: Pink scissors, colored plastic tweezers (plastic material)
 - Personal items: Watches, jewelry, keys
 
-TASK: Analyze the image and identify ONLY metal surgical tools ON THE WHITE FOAM BOARD that need to be moved to the metal box.
+TASK: Analyze the image and identify ONLY metal surgical tools ON THE WHITE FOAM BOARD (tray) that need to be moved to the metal box (surgical tool box).
 
 MATERIAL RECOGNITION:
 - Metal surgical tools: Shiny metallic appearance, professional medical-grade finish
@@ -26,16 +24,16 @@ MATERIAL RECOGNITION:
 CRITICAL DIRECTIONAL RULE:
 - ONLY analyze tools ON the white foam board (tray)
 - IGNORE any tools already IN the metal box (they are already correctly stored)
-- Generate commands ONLY for tools that need to move FROM tray TO box
+- Generate commands ONLY for tools that need to move FROM tray TO surgical tool box
+- The white robot arm (scrub nurse) will execute these commands
 
 Output format:
 <reasoning>
-I am examining this surgical environment image. On the white foam board (tray), I can see: [For each item from left to right, describe: position, material (metal/plastic), tool type, and classification as surgical vs non-surgical. For scissors, specify if curved or straight.]
+I am examining this surgical environment image. I can see the white foam board (tray), metal box (surgical tool box), and white robot arm (scrub nurse). On the white foam board, I can see: [For each item from left to right, describe: position, material (metal/plastic), tool type, and classification as surgical vs non-surgical.]
 </reasoning>
 
 <plan>
 [Use commands ONLY if metal surgical tools are definitively present ON THE TRAY:]
-- For each curved metal scissor: "Grip a curved scissor and put it in the box."
 - For each straight metal scissor: "Grip a straight scissor and put it in the box."
 - For each metal tweezer: "Grip a tweezer and put it in the box."
 [If no surgical tools ON THE TRAY: "No actions needed."]
@@ -43,7 +41,6 @@ I am examining this surgical environment image. On the white foam board (tray), 
 
 STRICT RULES:
 - Only identify items you can clearly see as METAL surgical instruments ON THE WHITE FOAM BOARD
-- Distinguish curved from straight scissors by blade shape
 - Distinguish metal from plastic by appearance and color
 - Distinguish surgical tools from office supplies by design and purpose
 - Completely ignore any tools already stored in the metal box

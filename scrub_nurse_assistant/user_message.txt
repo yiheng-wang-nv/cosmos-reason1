@@ -1,4 +1,9 @@
-Analyze this surgical environment image carefully. Your task is to identify ONLY metal surgical tools ON THE WHITE FOAM BOARD (tray) that need to be moved to the metal tool box.
+Analyze this surgical environment image carefully. Your task is to identify ONLY metal surgical tools ON THE WHITE FOAM BOARD (tray) that need to be moved to the metal surgical tool box.
+
+ENVIRONMENT COMPONENTS TO RECOGNIZE:
+🔲 WHITE FOAM BOARD = surgical tray (where tools are currently placed)
+📦 METAL BOX = surgical tool box (target storage location)
+🦾 WHITE ROBOT ARM = robot scrub nurse (SOARM 101 that will move the tools)
 
 STEP-BY-STEP ANALYSIS:
 1. Locate the white foam board (surgical tray) in the image
@@ -6,12 +11,10 @@ STEP-BY-STEP ANALYSIS:
 3. For each item, determine:
    - Material: Metal (shiny, metallic) vs Plastic (colored, non-metallic) vs Other
    - Design: Medical instrument vs Office supply vs Personal item
-   - Tool type: If scissors, determine curved vs straight blade shape
+   - Tool type: Surgical scissors (straight blades) or surgical tweezers
 
 WHAT TO LOOK FOR ON THE TRAY:
-✓ Metal surgical scissors with finger holes:
-  - Curved scissors: Blades curve inward
-  - Straight scissors: Blades are straight
+✓ Metal surgical scissors: Two straight metal blades with finger holes
 ✓ Metal surgical tweezers: Thin pointed metal instruments
 
 WHAT TO IGNORE:
@@ -24,23 +27,21 @@ IDENTIFICATION TIPS:
 - Metal surgical tools: Professional medical appearance, shiny metallic finish
 - Plastic tools: Bright colors (pink, blue), non-metallic appearance
 - Office supplies: Designed for writing/office use, not medical procedures
-- Scissors shape: Look carefully at blade curvature to distinguish curved vs straight
+- Focus on straight-blade scissors only
 
 CRITICAL: Use EXACTLY these commands ONLY for confirmed metal surgical tools ON THE TRAY:
-- For curved metal scissors: "Grip a curved scissor and put it in the box."
 - For straight metal scissors: "Grip a straight scissor and put it in the box."
 - For metal tweezers: "Grip a tweezer and put it in the box."
 - If no surgical tools ON THE TRAY: "No actions needed."
 
 Use exact XML format with plain text only:
 <reasoning>
-[Analyze the white foam board from left to right. For each item ON THE TRAY, describe: position, material, tool type (including curved/straight for scissors), and surgical vs non-surgical classification. Do not analyze items in the metal box.]
+[First identify the white foam board (tray), metal box (surgical tool box), and white robot arm (scrub nurse). Then analyze the tray from left to right. For each item ON THE TRAY, describe: position, material, tool type, and surgical vs non-surgical classification. Do not analyze items in the metal box.]
 </reasoning>
 
 <plan>
 [Use the EXACT command phrases listed above]
 [One command per surgical tool ON THE TRAY, each on a separate line]
-[Specify curved or straight for scissors]
 [Do NOT use \n characters or any other formatting]
 [Do NOT modify the command wording]
 </plan> 

@@ -143,9 +143,9 @@ def print_commands(commands: List[str]):
         return
     
     for i, command in enumerate(commands, 1):
-        # Determine icon based on command content
-        if "scissor" in command.lower():
-            icon = Icons.SCISSORS
+        # Determine icon based on command content (simplified)
+        if "straight scissor" in command.lower():
+            icon = f"{Icons.SCISSORS}➡️"
         elif "tweezer" in command.lower():
             icon = Icons.TWEEZERS
         else:
@@ -155,7 +155,7 @@ def print_commands(commands: List[str]):
 
 def print_structured_response(response_text: str):
     """
-    Parse and print the structured response from the server.
+    Parse and print the structured response from the server with enhanced reasoning display.
     
     Args:
         response_text (str): Raw response text from the server
@@ -163,23 +163,44 @@ def print_structured_response(response_text: str):
     # Extract structured sections
     sections = extract_structured_response(response_text)
     
-    # Print reasoning section
+    # Print reasoning section with enhanced formatting
     if sections["reasoning"]:
-        print_section("REASONING & ANALYSIS", sections["reasoning"], Icons.ANALYSIS, Colors.CYAN)
+        print(f"\n{colorize('🔍 ANALYSIS & REASONING:', Colors.CYAN, bold=True)}")
+        print(f"{colorize('─' * 70, Colors.CYAN)}")
+        
+        # Format reasoning text with proper indentation
+        reasoning_lines = sections["reasoning"].split('\n')
+        for line in reasoning_lines:
+            if line.strip():
+                print(f"  {colorize(line.strip(), Colors.WHITE)}")
+            else:
+                print()  # Preserve empty lines for readability
     
     # Print plan section with command extraction
     if sections["plan"]:
-        print_section("EXECUTION PLAN", sections["plan"], Icons.PLAN, Colors.CYAN)
+        print(f"\n{colorize('📋 EXECUTION PLAN:', Colors.CYAN, bold=True)}")
+        print(f"{colorize('─' * 70, Colors.CYAN)}")
         
-        # Extract and display commands
+        # Format plan text
+        plan_lines = sections["plan"].split('\n')
+        for line in plan_lines:
+            if line.strip():
+                print(f"  {colorize(line.strip(), Colors.WHITE)}")
+            else:
+                print()
+        
+        # Extract and display commands separately
         commands = extract_plan_commands(sections["plan"])
         if commands:
-            print(f"\n{colorize('Robot Commands:', Colors.MAGENTA, bold=True)}")
+            print(f"\n{colorize('🤖 EXTRACTED ROBOT COMMANDS:', Colors.MAGENTA, bold=True)}")
+            print(f"{colorize('─' * 70, Colors.MAGENTA)}")
             print_commands(commands)
     
     # If no structured sections found, print raw response
     if not sections["reasoning"] and not sections["plan"]:
-        print_section("RAW RESPONSE", response_text, Icons.INFO, Colors.YELLOW)
+        print(f"\n{colorize('📄 RAW RESPONSE:', Colors.YELLOW, bold=True)}")
+        print(f"{colorize('─' * 70, Colors.YELLOW)}")
+        print(f"  {colorize(response_text.strip(), Colors.WHITE)}")
 
 def capture_camera_image(camera_index: int = 0, preview: bool = False, save_debug: bool = False) -> Optional[Image.Image]:
     """
@@ -283,14 +304,41 @@ def capture_camera_image(camera_index: int = 0, preview: bool = False, save_debu
         
         return pil_image
 
+def print_analysis_summary(result: dict):
+    """Print simplified analysis summary from server response."""
+    if "analysis" not in result:
+        return
+    
+    analysis = result["analysis"]
+    
+    # Only show a brief summary, no duplicate commands
+    tool_count = analysis.get("surgical_tools_detected", 0)
+    scissors_found = analysis.get("scissors_detected", False)
+    tweezers_found = analysis.get("tweezers_detected", False)
+    
+    if tool_count > 0:
+        print(f"\n{colorize('📋 DETECTION SUMMARY:', Colors.GREEN, bold=True)} {colorize(f'{tool_count} surgical tools detected', Colors.WHITE)}")
+        
+        # Brief tool breakdown without commands
+        tool_details = []
+        if scissors_found:
+            tool_details.append(f"{colorize(Icons.SCISSORS, Colors.YELLOW)} Straight surgical scissors")
+        if tweezers_found:
+            tool_details.append(f"{colorize(Icons.TWEEZERS, Colors.YELLOW)} Surgical tweezers")
+        
+        if tool_details:
+            print(f"  {colorize(' + ', Colors.GREEN).join(tool_details)}")
+    else:
+        print(f"\n{colorize('📋 DETECTION SUMMARY:', Colors.YELLOW, bold=True)} {colorize('No surgical tools detected', Colors.WHITE)}")
+        print(f"  {colorize('→ Robot scrub nurse will remain idle', Colors.YELLOW)}")
+
 def send_request(image_path: Optional[str] = None, camera_index: Optional[int] = None,
                 user_message: Optional[str] = None, system_message: Optional[str] = None, 
                 server_url: str = "http://localhost:8000", max_tokens: int = 1024, 
                 temperature: float = 0.0, use_base64: bool = False, 
                 camera_preview: bool = False, debug_mode: bool = False):
-    """
-    Send analysis request to the server.
-    """
+    """Send analysis request to the server."""
+    
     # Print configuration
     print_config_info(max_tokens, temperature)
     
@@ -367,7 +415,7 @@ def send_request(image_path: Optional[str] = None, camera_index: Optional[int] =
     if system_message:
         request_data["system_message"] = system_message
     
-    print(f"\n{colorize(Icons.GEAR, Colors.CYAN)} {colorize('Sending request to server...', Colors.CYAN)}")
+    print(f"\n{colorize(Icons.GEAR, Colors.CYAN)} {colorize('Sending surgical environment analysis request...', Colors.CYAN)}")
     
     try:
         # Send POST request
@@ -381,7 +429,7 @@ def send_request(image_path: Optional[str] = None, camera_index: Optional[int] =
         if response.status_code == 200:
             result = response.json()
             
-            # Print header
+            # Print main header
             print_header("SURGICAL ENVIRONMENT ANALYSIS RESULT", Icons.MEDICAL, Colors.GREEN)
             
             # Show which image was analyzed
@@ -396,17 +444,20 @@ def send_request(image_path: Optional[str] = None, camera_index: Optional[int] =
                 print(f"\n{colorize(Icons.CONFIG, Colors.CYAN)} {colorize('Server Config:', Colors.WHITE, bold=True)} "
                       f"{colorize('max_tokens=', Colors.CYAN)}{colorize(str(config.get('max_tokens', 'unknown')), Colors.WHITE)} "
                       f"{colorize('temperature=', Colors.CYAN)}{colorize(str(config.get('temperature', 'unknown')), Colors.WHITE)} "
-                      f"{colorize('actual_tokens=', Colors.CYAN)}{colorize(str(config.get('actual_tokens', 'unknown')), Colors.WHITE)}")
+                      f"{colorize('tokens_used=', Colors.CYAN)}{colorize(str(config.get('actual_tokens', 'unknown')), Colors.WHITE)}")
             
-            # Print analysis summary
+            # Print detailed structured response (including reasoning)
+            print_structured_response(result["response"])
+            
+            # Print enhanced analysis summary
             print_analysis_summary(result)
             
             # Print footer
-            print(f"\n{colorize('=' * 80, Colors.GREEN)}")
-            print(f"{colorize(Icons.SUCCESS, Colors.GREEN)} {colorize('Analysis completed successfully!', Colors.GREEN, bold=True)}")
+            print(f"\n{colorize('═' * 80, Colors.GREEN)}")
+            print(f"{colorize(Icons.SUCCESS, Colors.GREEN)} {colorize('Surgical environment analysis completed!', Colors.GREEN, bold=True)}")
             
         else:
-            print(f"\n{colorize(Icons.ERROR, Colors.RED)} {colorize('Request failed!', Colors.RED, bold=True)}")
+            print(f"\n{colorize(Icons.ERROR, Colors.RED)} {colorize('Analysis request failed!', Colors.RED, bold=True)}")
             print(f"{colorize('Status code:', Colors.RED)} {response.status_code}")
             print(f"{colorize('Error message:', Colors.RED)} {response.text}")
             
@@ -438,54 +489,21 @@ def load_system_message_from_file(file_path: str) -> Optional[str]:
         print(f"{colorize(Icons.ERROR, Colors.RED)} Error reading system message file: {e}")
         return None
 
-def print_analysis_summary(result: dict):
-    """Print detailed analysis summary from server response."""
-    if "analysis" not in result:
-        return
-    
-    analysis = result["analysis"]
-    
-    print(f"\n{colorize('SURGICAL TOOL ANALYSIS:', Colors.MAGENTA, bold=True)}")
-    print(f"{colorize('─' * 50, Colors.MAGENTA)}")
-    
-    tool_count = analysis.get("surgical_tools_detected", 0)
-    scissors_found = analysis.get("scissors_detected", False)
-    curved_scissors_found = analysis.get("curved_scissors_detected", False)
-    straight_scissors_found = analysis.get("straight_scissors_detected", False)
-    tweezers_found = analysis.get("tweezers_detected", False)
-    
-    if tool_count > 0:
-        print(f"{colorize(Icons.SUCCESS, Colors.GREEN)} {colorize('Surgical tools detected:', Colors.WHITE, bold=True)} {colorize(str(tool_count), Colors.GREEN, bold=True)}")
-        
-        if curved_scissors_found:
-            print(f"  {colorize(Icons.SCISSORS, Colors.YELLOW)} {colorize('Metal curved surgical scissors found', Colors.WHITE)}")
-        if straight_scissors_found:
-            print(f"  {colorize(Icons.SCISSORS, Colors.YELLOW)} {colorize('Metal straight surgical scissors found', Colors.WHITE)}")
-        if tweezers_found:
-            print(f"  {colorize(Icons.TWEEZERS, Colors.YELLOW)} {colorize('Metal surgical tweezers found', Colors.WHITE)}")
-        
-        print(f"\n{colorize('ROBOT COMMANDS TO EXECUTE:', Colors.GREEN, bold=True)}")
-        commands = analysis.get("robot_commands", [])
-        for i, cmd in enumerate(commands, 1):
-            if "no actions needed" not in cmd.lower():
-                if "curved scissor" in cmd.lower():
-                    icon = f"{Icons.SCISSORS}🔄"  # Curved scissors icon
-                elif "straight scissor" in cmd.lower():
-                    icon = f"{Icons.SCISSORS}➡️"  # Straight scissors icon
-                else:
-                    icon = Icons.TWEEZERS
-                print(f"  {colorize(f'{i}.', Colors.CYAN)} {colorize(icon, Colors.YELLOW)} {colorize(cmd, Colors.WHITE)}")
-    else:
-        print(f"{colorize(Icons.INFO, Colors.YELLOW)} {colorize('No surgical tools detected', Colors.WHITE, bold=True)}")
-        print(f"  {colorize('→ Only non-surgical items or empty tray', Colors.YELLOW)}")
-        print(f"  {colorize('→ Robot will remain idle', Colors.YELLOW)}")
-
 def main():
     """Main function to parse arguments and send request."""
     parser = argparse.ArgumentParser(
-        description=f"{Icons.ROBOT} Surgical Environment Analysis Client",
+        description=f"{Icons.ROBOT} Surgical Environment Analysis Client for SOARM 101",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
+{colorize('ENVIRONMENT KNOWLEDGE:', Colors.CYAN, bold=True)}
+  🔲 White foam board = surgical tray
+  📦 Metal box = surgical tool box  
+  🦾 White robot arm = robot scrub nurse (SOARM 101)
+
+{colorize('SUPPORTED TOOLS:', Colors.YELLOW, bold=True)}
+  ✂️  Metal surgical scissors (straight blades)
+  🔧 Metal surgical tweezers
+
 {colorize('Examples:', Colors.CYAN, bold=True)}
   {colorize('Camera capture with preview:', Colors.WHITE)}
     python env_analyze.py --camera 0 --preview
@@ -498,9 +516,6 @@ def main():
     
   {colorize('Remote server analysis:', Colors.WHITE)}
     python env_analyze.py image.jpg --server http://10.176.228.194:8000
-    
-  {colorize('Custom parameters:', Colors.WHITE)}
-    python env_analyze.py --camera 0 --max-tokens 2048 --temperature 0.0
         """
     )
     

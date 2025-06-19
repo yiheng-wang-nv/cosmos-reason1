@@ -42,15 +42,13 @@ def main():
             print(f"Loaded user message from: {file_path}")
             return content
     
-    # Extract and analyze surgical commands
+    # Extract and analyze surgical commands (simplified for straight scissors + tweezers only)
     def extract_surgical_commands(response_text: str) -> dict:
         """Extract and analyze surgical commands from response."""
         result = {
             "commands": [],
             "tool_count": 0,
             "has_scissors": False,
-            "has_curved_scissors": False,
-            "has_straight_scissors": False,
             "has_tweezers": False
         }
         
@@ -64,15 +62,9 @@ def main():
         
         for line in lines:
             line_lower = line.lower()
-            if "grip a curved scissor and put it in the box" in line_lower:
+            if "grip a straight scissor and put it in the box" in line_lower:
                 result["commands"].append(line)
                 result["has_scissors"] = True
-                result["has_curved_scissors"] = True
-                result["tool_count"] += 1
-            elif "grip a straight scissor and put it in the box" in line_lower:
-                result["commands"].append(line)
-                result["has_scissors"] = True
-                result["has_straight_scissors"] = True
                 result["tool_count"] += 1
             elif "grip a tweezer and put it in the box" in line_lower:
                 result["commands"].append(line)
@@ -156,8 +148,6 @@ def main():
                 "analysis": {
                     "surgical_tools_detected": command_analysis["tool_count"],
                     "scissors_detected": command_analysis["has_scissors"],
-                    "curved_scissors_detected": command_analysis["has_curved_scissors"],
-                    "straight_scissors_detected": command_analysis["has_straight_scissors"],
                     "tweezers_detected": command_analysis["has_tweezers"],
                     "robot_commands": command_analysis["commands"]
                 },
@@ -181,12 +171,14 @@ def main():
     print("=" * 60)
     print("Ready to analyze surgical environments and generate robot commands!")
     print("")
-    print("📋 Features:")
-    print("- Identifies metal surgical scissors (curved/straight)")
-    print("- Identifies metal surgical tweezers")
-    print("- Distinguishes surgical from non-surgical items")
-    print("- Generates precise SOARM 101 robot commands")
-    print("- Supports both local files and base64 image input")
+    print("📋 Supported Tools:")
+    print("- Metal surgical scissors (straight blades)")
+    print("- Metal surgical tweezers") 
+    print("")
+    print("🎯 Environment Components:")
+    print("- White foam board = surgical tray")
+    print("- Metal box = surgical tool box")
+    print("- White robot arm = robot scrub nurse (SOARM 101)")
     print("")
     print("🚀 Server starting on http://0.0.0.0:8000")
     print("=" * 60)
