@@ -6,24 +6,13 @@ Based on eval_gr00t_so100.py but adapted for SO101 robot.
 This script connects to a GR00T inference server and runs policy evaluation on SO101.
 
 Usage:
-    # Start GR00T server first:
-    python scripts/inference_service.py --server \
-        --model_path /localhome/local-vennw/code/Isaac-GR00T/so101_wrist_finetune/checkpoint-10000 \
-        --embodiment_tag new_embodiment \
-        --data_config so101_wrist \
-        --host 0.0.0.0 \
-        --port 5555 \
-        --denoising_steps 4
-
-    # Then run this client:
-    ssh -L 5555:localhost:5555 local-vennw@10.176.195.216
-    python eval_gr00t_so101.py \
-        --host 127.0.0.1 \
-        --port 5555 \
-        --camera_index 0 \
-        --port_follower /dev/ttyACM0 \
-        --task_description "Grip a straight scissor and put it in the box." \
-        --actions_to_execute 300
+python so101_robot_utils.py \
+    --host 127.0.0.1 \
+    --port 5555 \
+    --port_follower /dev/ttyACM1 \
+    --task_description "Grip a straight scissor and put it in the box." \
+    --actions_to_execute 20 \
+    --monitor_cameras
 """
 
 import argparse
@@ -196,6 +185,46 @@ class SO101Robot:
             img_room = (img_room * 255).astype(np.uint8)
         return img, img_room
 
+    def get_camera_image(self, camera_name: str) -> np.ndarray:
+        """Get current image from a specified camera as an RGB numpy array."""
+        if not self.enable_camera:
+            print(f"Cameras are disabled. Returning a black image for {camera_name}.")
+            # Assuming default camera dimensions if not available otherwise
+            # You might want to get this from config if available
+            return np.zeros((480, 640, 3), dtype=np.uint8)
+
+        if camera_name not in self.config.cameras:
+            raise ValueError(f"Camera '{camera_name}' not found in robot configuration. Available cameras: {list(self.config.cameras.keys())}")
+
+        obs = self.get_observation()
+        image_key = f"observation.images.{camera_name}"
+        
+        if image_key not in obs:
+            raise KeyError(f"Image key '{image_key}' not found in observation. Available keys: {list(obs.keys())}")
+
+        img_data = obs[image_key].data.numpy()
+
+        # Convert to HWC format if needed
+        if len(img_data.shape) == 3 and img_data.shape[0] == 3:  # CHW format
+            img_data = img_data.transpose(1, 2, 0)  # Convert to HWC
+        
+        # Ensure uint8
+        if img_data.dtype != np.uint8:
+            # Check if values are in [0, 1] range before scaling
+            if img_data.max() <= 1.0 and img_data.min() >= 0.0:
+                img_data = (img_data * 255).astype(np.uint8)
+            else:
+                # If not in [0,1], try to cast directly, or handle as an error
+                try:
+                    img_data = img_data.astype(np.uint8)
+                except ValueError as e:
+                    print(f"Warning: Could not convert image data for {camera_name} to uint8 directly. Values might be out of [0, 255] range or not in [0,1] for scaling. Error: {e}")
+                    # Return a black image or raise an error
+                    return np.zeros((img_data.shape[1], img_data.shape[2], 3) if len(img_data.shape) == 3 and img_data.shape[0] == 3 else (480,640,3), dtype=np.uint8)
+
+
+        return img_data
+
     def set_target_state(self, target_state: torch.Tensor):
         """Send target state to robot."""
         self.robot.send_action(target_state)
@@ -343,6 +372,7 @@ def main():
     parser.add_argument("--create_videos", action="store_true", help="Create videos from saved images")
     parser.add_argument("--video_fps", type=int, default=15, help="FPS for created videos")
     parser.add_argument("--output_dir", type=str, default="eval_so101_images", help="Output directory for images")
+    parser.add_argument("--monitor_cameras", action="store_true", help="Display live camera feeds in windows")
     
     args = parser.parse_args()
 
@@ -378,7 +408,29 @@ def main():
 
     try:
         with robot.activate():
-            print("Starting policy execution...")
+            # --- Start camera preview if requested ---
+            if args.monitor_cameras:
+                print("\nCamera preview is active.")
+                print("Check the camera windows. Press 's' to start policy execution, or 'q' to quit.")
+                while True:
+                    img_preview, img_room_preview = robot.get_current_img()
+                    
+                    # Convert to BGR for OpenCV display
+                    img_wrist_bgr = cv2.cvtColor(img_preview, cv2.COLOR_RGB2BGR)
+                    img_room_bgr = cv2.cvtColor(img_room_preview, cv2.COLOR_RGB2BGR)
+
+                    cv2.imshow("Wrist Camera", img_wrist_bgr)
+                    cv2.imshow("Room Camera", img_room_bgr)
+
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('s'):
+                        print("Starting policy execution...")
+                        break
+                    elif key == ord('q'):
+                        print("Quitting application from preview.")
+                        return  # Exit main function
+            else:
+                print("Starting policy execution...")
             
             for i in tqdm(range(args.actions_to_execute), desc="Executing actions"):
                 # Get current observation
@@ -421,6 +473,16 @@ def main():
                         
                         image_count += 1
                 
+                # Display camera feeds if monitoring is enabled
+                if args.monitor_cameras:
+                    img_wrist_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                    img_room_bgr = cv2.cvtColor(img_room, cv2.COLOR_RGB2BGR)
+                    cv2.imshow("Wrist Camera", img_wrist_bgr)
+                    cv2.imshow("Room Camera", img_room_bgr)
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        print("'q' pressed, stopping execution.")
+                        break
+
                 action_time = time.time() - action_start_time
                 execution_time = time.time() - execution_start_time
                 
@@ -452,6 +514,8 @@ def main():
         raise
     finally:
         print("Cleaning up...")
+        if args.monitor_cameras:
+            cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
