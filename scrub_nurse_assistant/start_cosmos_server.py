@@ -28,7 +28,7 @@ def main():
         
         with open(file_path, "r") as f:
             content = f.read()
-            print(f"Loaded {filename} from: {file_path}")
+            print(f"Loaded system message from: {file_path}")
             return content
 
     # Load default user message from file
@@ -39,10 +39,10 @@ def main():
         
         with open(file_path, "r") as f:
             content = f.read()
-            print(f"Loaded {filename} from: {file_path}")
+            print(f"Loaded user message from: {file_path}")
             return content
     
-    # Add command extraction and validation function
+    # Extract and analyze surgical commands
     def extract_surgical_commands(response_text: str) -> dict:
         """Extract and analyze surgical commands from response."""
         result = {
@@ -84,69 +84,54 @@ def main():
         return result
     
     class PromptRequest(BaseModel):
-        image_path: Optional[str] = None  # For local file path (server-side files)
-        image_base64: Optional[str] = None  # For base64-encoded image data (remote clients)
+        image_path: Optional[str] = None
+        image_base64: Optional[str] = None
         user_message: Optional[str] = None
         system_message: Optional[str] = None
-        max_tokens: Optional[int] = 1024  # Default max_tokens, can be overridden by client
-        temperature: Optional[float] = 0.0  # Default temperature for deterministic responses
+        max_tokens: Optional[int] = 1024
+        temperature: Optional[float] = 0.0
 
     @app.post("/generate")
     async def generate(request: PromptRequest):
-        """
-        Generate surgical tool analysis and task planning response.
+        """Generate surgical tool analysis and robot commands."""
         
-        Args:
-            request: PromptRequest containing:
-                - image_path: Path to surgical environment image (for server-side files)
-                - image_base64: Base64-encoded image data (for remote clients)
-                - user_message/system_message: Optional custom messages (overrides defaults)
-                - max_tokens/temperature: Sampling parameters
-            
-        Returns:
-            dict: Analysis response with structured reasoning/plan format and command analysis
-        """
-        # Validate that either image_path or image_base64 is provided
+        # Validate image input
         if not request.image_path and not request.image_base64:
             return {"error": "Either image_path or image_base64 must be provided"}
         
         if request.image_path and request.image_base64:
             return {"error": "Provide either image_path OR image_base64, not both"}
         
-        # Validate max_tokens range (reasonable limits)
-        max_tokens = min(max(request.max_tokens, 128), 8192)  # Clamp between 128 and 8192
-        temperature = min(max(request.temperature, 0.0), 2.0)  # Clamp between 0.0 and 2.0
+        # Validate parameters
+        max_tokens = min(max(request.max_tokens, 128), 8192)
+        temperature = min(max(request.temperature, 0.0), 2.0)
         
         try:
-            # Load image from either file path or base64 data
+            # Load image
             if request.image_path:
-                # Server-side file path
                 if not os.path.exists(request.image_path):
                     return {"error": f"Image file does not exist: {request.image_path}"}
                 image = Image.open(request.image_path)
             else:
-                # Base64-encoded image from remote client
                 try:
-                    # Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
                     base64_data = request.image_base64
                     if base64_data.startswith('data:'):
                         base64_data = base64_data.split(',', 1)[1]
                     
-                    # Decode base64 to bytes
                     image_bytes = base64.b64decode(base64_data)
-                    # Create PIL Image from bytes
                     image = Image.open(io.BytesIO(image_bytes))
                 except Exception as e:
                     return {"error": f"Failed to decode base64 image: {str(e)}"}
             
-            # Convert to RGB if necessary (some formats like RGBA or P mode can cause issues)
+            # Convert to RGB if necessary
             if image.mode != 'RGB':
                 image = image.convert('RGB')
             
-            # Use custom messages if provided, otherwise use defaults
+            # Load messages
             system_text = request.system_message if request.system_message else load_default_system_message()
             user_text = request.user_message if request.user_message else load_default_user_message()
             
+            # Prepare messages
             messages = [
                 {"role": "system", "content": system_text},
                 {"role": "user", "content": [
@@ -155,16 +140,15 @@ def main():
                 ]},
             ]
 
-            # Create sampling parameters for this specific request
+            # Generate response
             sampling_params = SamplingParams(temperature=temperature, max_tokens=max_tokens)
-            
             prompt = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
             llm_inputs = {"prompt": prompt, "multi_modal_data": {"image": image}}
             outputs = llm.generate([llm_inputs], sampling_params)
             
             response_text = outputs[0].outputs[0].text
             
-            # Extract and analyze commands
+            # Analyze commands
             command_analysis = extract_surgical_commands(response_text)
             
             return {
@@ -184,7 +168,7 @@ def main():
                 }
             }
         except Exception as e:
-            return {"error": f"Generation failed: {str(e)}"}
+            return {"error": f"Analysis failed: {str(e)}"}
 
     @app.get("/health")
     async def health_check():
@@ -192,15 +176,21 @@ def main():
         return {"status": "healthy", "model": MODEL_PATH}
     
     # Start the server
-    print("Starting Surgical Environment Analysis Server...")
-    print("Ready to analyze surgical environment images and generate robot commands!")
-    print("Features:")
-    print("- Analyzes surgical environments for scrub nurse tasks")
-    print("- Distinguishes surgical tools from office supplies")
-    print("- Generates precise robot commands for tool organization")
-    print("- Supports both local file paths and base64 image encoding")
-    print("- Auto-loads system_message.txt and user_message.txt")
-    print("- Provides detailed command analysis")
+    print("=" * 60)
+    print("🏥 SURGICAL ENVIRONMENT ANALYSIS SERVER")
+    print("=" * 60)
+    print("Ready to analyze surgical environments and generate robot commands!")
+    print("")
+    print("📋 Features:")
+    print("- Identifies metal surgical scissors (curved/straight)")
+    print("- Identifies metal surgical tweezers")
+    print("- Distinguishes surgical from non-surgical items")
+    print("- Generates precise SOARM 101 robot commands")
+    print("- Supports both local files and base64 image input")
+    print("")
+    print("🚀 Server starting on http://0.0.0.0:8000")
+    print("=" * 60)
+    
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 if __name__ == "__main__":

@@ -487,14 +487,20 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
 {colorize('Examples:', Colors.CYAN, bold=True)}
+  {colorize('Camera capture with preview:', Colors.WHITE)}
+    python env_analyze.py --camera 0 --preview
+  
   {colorize('Direct camera capture:', Colors.WHITE)}
-    python surgical_env_analyze.py --camera 2
+    python env_analyze.py --camera 0
   
-  {colorize('Camera with preview:', Colors.WHITE)}
-    python surgical_env_analyze.py --camera 2 --preview
-  
-  {colorize('File analysis:', Colors.WHITE)}
-    python surgical_env_analyze.py image.jpg --server http://10.176.228.194:8000
+  {colorize('Analyze image file:', Colors.WHITE)}
+    python env_analyze.py image.jpg
+    
+  {colorize('Remote server analysis:', Colors.WHITE)}
+    python env_analyze.py image.jpg --server http://10.176.228.194:8000
+    
+  {colorize('Custom parameters:', Colors.WHITE)}
+    python env_analyze.py --camera 0 --max-tokens 2048 --temperature 0.0
         """
     )
     

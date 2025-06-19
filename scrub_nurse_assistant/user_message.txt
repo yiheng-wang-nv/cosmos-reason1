@@ -1,33 +1,32 @@
-Analyze this surgical environment image carefully. Identify ONLY metal surgical tools ON THE TRAY that need to be moved to the tool box.
+Analyze this surgical environment image carefully. Your task is to identify ONLY metal surgical tools ON THE WHITE FOAM BOARD (tray) that need to be moved to the metal tool box.
 
-WHAT TO LOOK FOR ON THE TRAY (left to right analysis):
-✓ Metal surgical scissors: Two metal blades with finger holes
+STEP-BY-STEP ANALYSIS:
+1. Locate the white foam board (surgical tray) in the image
+2. Examine each item ON the tray from left to right
+3. For each item, determine:
+   - Material: Metal (shiny, metallic) vs Plastic (colored, non-metallic) vs Other
+   - Design: Medical instrument vs Office supply vs Personal item
+   - Tool type: If scissors, determine curved vs straight blade shape
+
+WHAT TO LOOK FOR ON THE TRAY:
+✓ Metal surgical scissors with finger holes:
   - Curved scissors: Blades curve inward
   - Straight scissors: Blades are straight
-✓ Metal surgical tweezers: Thin pointed metal instruments for precise grasping
+✓ Metal surgical tweezers: Thin pointed metal instruments
 
-WHAT TO IGNORE ON THE TRAY:
-✗ Office supplies: Pens, markers, staplers (non-medical design)
-✗ Plastic tools: Pink scissors, colored plastic tweezers (plastic material)
-✗ Personal items: Watches, jewelry, keys
+WHAT TO IGNORE:
+✗ Tools already IN the metal box (they're correctly stored)
+✗ Office supplies ON the tray: Pens, markers (non-medical design)
+✗ Plastic tools ON the tray: Pink scissors, colored tweezers (plastic material)
+✗ Personal items ON the tray: Watches, jewelry, keys
 
-MATERIAL DISTINCTION:
-- METAL: Shiny, metallic appearance, professional medical finish
-- PLASTIC: Colored (pink, blue, etc.), non-metallic, often translucent
+IDENTIFICATION TIPS:
+- Metal surgical tools: Professional medical appearance, shiny metallic finish
+- Plastic tools: Bright colors (pink, blue), non-metallic appearance
+- Office supplies: Designed for writing/office use, not medical procedures
+- Scissors shape: Look carefully at blade curvature to distinguish curved vs straight
 
-SCISSOR SHAPE DISTINCTION:
-- CURVED: Blades curve inward, designed for specific surgical procedures
-- STRAIGHT: Blades are straight, standard surgical cutting design
-
-ANALYSIS REQUIREMENTS:
-- Examine each item from left to right
-- Check material: Metal vs plastic vs other
-- Check design: Medical vs office supply vs personal item
-- For scissors: Determine if curved or straight blade design
-- Check location: Must be ON the white foam board (tray)
-- Assess certainty: Only identify tools you can definitively classify
-
-CRITICAL: Use EXACTLY these commands ONLY for surgical tools ON THE TRAY:
+CRITICAL: Use EXACTLY these commands ONLY for confirmed metal surgical tools ON THE TRAY:
 - For curved metal scissors: "Grip a curved scissor and put it in the box."
 - For straight metal scissors: "Grip a straight scissor and put it in the box."
 - For metal tweezers: "Grip a tweezer and put it in the box."
@@ -35,7 +34,7 @@ CRITICAL: Use EXACTLY these commands ONLY for surgical tools ON THE TRAY:
 
 Use exact XML format with plain text only:
 <reasoning>
-[Analyze each item on the white foam board from left to right, describing: position, material, tool type (including curved/straight for scissors), and surgical vs non-surgical classification]
+[Analyze the white foam board from left to right. For each item ON THE TRAY, describe: position, material, tool type (including curved/straight for scissors), and surgical vs non-surgical classification. Do not analyze items in the metal box.]
 </reasoning>
 
 <plan>
