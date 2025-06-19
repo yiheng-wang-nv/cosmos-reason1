@@ -7,7 +7,8 @@ from PIL import Image
 import os
 import base64
 import io
-from typing import Optional
+import re
+from typing import Optional, List
 
 def main():
     MODEL_PATH = "nvidia/Cosmos-Reason1-7B"
@@ -21,56 +22,66 @@ def main():
     
     # Load default system message from file
     def load_default_system_message():
-        filename = "system_message_analyze.txt"
-        fallback = (
-            "You are analyzing a surgical environment for a scrub nurse task.\n\n"
-            "Task: Clean the surgical tray (white foam board) by moving surgical tools to the tool box (metal box). Leave non-surgical items unchanged.\n\n"
-            "Output format:\n"
-            "<reasoning>\n"
-            "This task simulates a surgical scrub nurse cleaning the tray by organizing surgical tools. I see [describe the metal scissors and tweezers you observe in the image].\n"
-            "</reasoning>\n\n"
-            "<plan>\n"
-            "Grip a straight scissor and put it in the box.\n"
-            "Grip a tweezer and put it in the box.\n"
-            "</plan>\n\n"
-            "CRITICAL: Use EXACTLY these commands in plan:\n"
-            "- \"Grip a straight scissor and put it in the box.\" (for scissors)\n"
-            "- \"Grip a tweezer and put it in the box.\" (for tweezers)\n"
-            "- If no surgical tools found: \"No actions needed.\""
-        )
+        filename = "system_message.txt"
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(script_dir, filename)
         
-        try:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            file_path = os.path.join(script_dir, filename)
-            with open(file_path, "r") as f:
-                content = f.read()
-                print(f"Loaded {filename} from: {file_path}")
-                return content
-        except FileNotFoundError:
-            print(f"File not found: {filename}, using fallback")
-            return fallback
+        with open(file_path, "r") as f:
+            content = f.read()
+            print(f"Loaded {filename} from: {file_path}")
+            return content
 
     # Load default user message from file
     def load_default_user_message():
-        filename = "user_message_analyze.txt"
-        fallback = (
-            "What metal surgical tools (scissors or tweezers) do you see in this image?\n\n"
-            "Use exact robot commands in plan section:\n"
-            "\"Grip a straight scissor and put it in the box.\"\n"
-            "\"Grip a tweezer and put it in the box.\"\n\n"
-            "Use XML format."
-        )
+        filename = "user_message.txt"
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(script_dir, filename)
         
-        try:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            file_path = os.path.join(script_dir, filename)
-            with open(file_path, "r") as f:
-                content = f.read()
-                print(f"Loaded {filename} from: {file_path}")
-                return content
-        except FileNotFoundError:
-            print(f"File not found: {filename}, using fallback")
-            return fallback
+        with open(file_path, "r") as f:
+            content = f.read()
+            print(f"Loaded {filename} from: {file_path}")
+            return content
+    
+    # Add command extraction and validation function
+    def extract_surgical_commands(response_text: str) -> dict:
+        """Extract and analyze surgical commands from response."""
+        result = {
+            "commands": [],
+            "tool_count": 0,
+            "has_scissors": False,
+            "has_curved_scissors": False,
+            "has_straight_scissors": False,
+            "has_tweezers": False
+        }
+        
+        # Extract plan section
+        plan_match = re.search(r'<plan>(.*?)</plan>', response_text, re.DOTALL | re.IGNORECASE)
+        if not plan_match:
+            return result
+        
+        plan_text = plan_match.group(1).strip()
+        lines = [line.strip() for line in plan_text.split('\n') if line.strip()]
+        
+        for line in lines:
+            line_lower = line.lower()
+            if "grip a curved scissor and put it in the box" in line_lower:
+                result["commands"].append(line)
+                result["has_scissors"] = True
+                result["has_curved_scissors"] = True
+                result["tool_count"] += 1
+            elif "grip a straight scissor and put it in the box" in line_lower:
+                result["commands"].append(line)
+                result["has_scissors"] = True
+                result["has_straight_scissors"] = True
+                result["tool_count"] += 1
+            elif "grip a tweezer and put it in the box" in line_lower:
+                result["commands"].append(line)
+                result["has_tweezers"] = True
+                result["tool_count"] += 1
+            elif "no actions needed" in line_lower:
+                result["commands"].append(line)
+        
+        return result
     
     class PromptRequest(BaseModel):
         image_path: Optional[str] = None  # For local file path (server-side files)
@@ -93,7 +104,7 @@ def main():
                 - max_tokens/temperature: Sampling parameters
             
         Returns:
-            dict: Analysis response with structured reasoning/plan format
+            dict: Analysis response with structured reasoning/plan format and command analysis
         """
         # Validate that either image_path or image_base64 is provided
         if not request.image_path and not request.image_base64:
@@ -151,8 +162,21 @@ def main():
             llm_inputs = {"prompt": prompt, "multi_modal_data": {"image": image}}
             outputs = llm.generate([llm_inputs], sampling_params)
             
+            response_text = outputs[0].outputs[0].text
+            
+            # Extract and analyze commands
+            command_analysis = extract_surgical_commands(response_text)
+            
             return {
-                "response": outputs[0].outputs[0].text,
+                "response": response_text,
+                "analysis": {
+                    "surgical_tools_detected": command_analysis["tool_count"],
+                    "scissors_detected": command_analysis["has_scissors"],
+                    "curved_scissors_detected": command_analysis["has_curved_scissors"],
+                    "straight_scissors_detected": command_analysis["has_straight_scissors"],
+                    "tweezers_detected": command_analysis["has_tweezers"],
+                    "robot_commands": command_analysis["commands"]
+                },
                 "config": {
                     "max_tokens": max_tokens,
                     "temperature": temperature,
@@ -172,10 +196,11 @@ def main():
     print("Ready to analyze surgical environment images and generate robot commands!")
     print("Features:")
     print("- Analyzes surgical environments for scrub nurse tasks")
+    print("- Distinguishes surgical tools from office supplies")
     print("- Generates precise robot commands for tool organization")
     print("- Supports both local file paths and base64 image encoding")
-    print("- Auto-loads system_message_analyze.txt and user_message_analyze.txt")
-    print("- Supports custom message overrides via API parameters")
+    print("- Auto-loads system_message.txt and user_message.txt")
+    print("- Provides detailed command analysis")
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 if __name__ == "__main__":

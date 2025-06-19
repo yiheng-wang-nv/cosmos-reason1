@@ -398,8 +398,8 @@ def send_request(image_path: Optional[str] = None, camera_index: Optional[int] =
                       f"{colorize('temperature=', Colors.CYAN)}{colorize(str(config.get('temperature', 'unknown')), Colors.WHITE)} "
                       f"{colorize('actual_tokens=', Colors.CYAN)}{colorize(str(config.get('actual_tokens', 'unknown')), Colors.WHITE)}")
             
-            # Print structured response
-            print_structured_response(result["response"])
+            # Print analysis summary
+            print_analysis_summary(result)
             
             # Print footer
             print(f"\n{colorize('=' * 80, Colors.GREEN)}")
@@ -437,6 +437,48 @@ def load_system_message_from_file(file_path: str) -> Optional[str]:
     except Exception as e:
         print(f"{colorize(Icons.ERROR, Colors.RED)} Error reading system message file: {e}")
         return None
+
+def print_analysis_summary(result: dict):
+    """Print detailed analysis summary from server response."""
+    if "analysis" not in result:
+        return
+    
+    analysis = result["analysis"]
+    
+    print(f"\n{colorize('SURGICAL TOOL ANALYSIS:', Colors.MAGENTA, bold=True)}")
+    print(f"{colorize('─' * 50, Colors.MAGENTA)}")
+    
+    tool_count = analysis.get("surgical_tools_detected", 0)
+    scissors_found = analysis.get("scissors_detected", False)
+    curved_scissors_found = analysis.get("curved_scissors_detected", False)
+    straight_scissors_found = analysis.get("straight_scissors_detected", False)
+    tweezers_found = analysis.get("tweezers_detected", False)
+    
+    if tool_count > 0:
+        print(f"{colorize(Icons.SUCCESS, Colors.GREEN)} {colorize('Surgical tools detected:', Colors.WHITE, bold=True)} {colorize(str(tool_count), Colors.GREEN, bold=True)}")
+        
+        if curved_scissors_found:
+            print(f"  {colorize(Icons.SCISSORS, Colors.YELLOW)} {colorize('Metal curved surgical scissors found', Colors.WHITE)}")
+        if straight_scissors_found:
+            print(f"  {colorize(Icons.SCISSORS, Colors.YELLOW)} {colorize('Metal straight surgical scissors found', Colors.WHITE)}")
+        if tweezers_found:
+            print(f"  {colorize(Icons.TWEEZERS, Colors.YELLOW)} {colorize('Metal surgical tweezers found', Colors.WHITE)}")
+        
+        print(f"\n{colorize('ROBOT COMMANDS TO EXECUTE:', Colors.GREEN, bold=True)}")
+        commands = analysis.get("robot_commands", [])
+        for i, cmd in enumerate(commands, 1):
+            if "no actions needed" not in cmd.lower():
+                if "curved scissor" in cmd.lower():
+                    icon = f"{Icons.SCISSORS}🔄"  # Curved scissors icon
+                elif "straight scissor" in cmd.lower():
+                    icon = f"{Icons.SCISSORS}➡️"  # Straight scissors icon
+                else:
+                    icon = Icons.TWEEZERS
+                print(f"  {colorize(f'{i}.', Colors.CYAN)} {colorize(icon, Colors.YELLOW)} {colorize(cmd, Colors.WHITE)}")
+    else:
+        print(f"{colorize(Icons.INFO, Colors.YELLOW)} {colorize('No surgical tools detected', Colors.WHITE, bold=True)}")
+        print(f"  {colorize('→ Only non-surgical items or empty tray', Colors.YELLOW)}")
+        print(f"  {colorize('→ Robot will remain idle', Colors.YELLOW)}")
 
 def main():
     """Main function to parse arguments and send request."""

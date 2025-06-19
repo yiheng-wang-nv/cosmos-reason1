@@ -51,43 +51,47 @@ def print_header(title: str, icon: str = "", color: str = Colors.CYAN):
     print(f"{colorize(header_line, color)}")
 
 def create_warmup_messages():
-    """Create the warm-up system and user messages with fixed descriptions."""
+    """Create the warm-up system and user messages based on the actual reference image content."""
     
-    system_message = """You are learning about a surgical environment simulation for robotic scrub nurse tasks.
+    system_message = """You are learning about a surgical environment simulation for SOARM 101 robotic scrub nurse tasks.
 
-ENVIRONMENT SETUP DESCRIPTION:
-- WHITE FOAM BOARD = surgical tray (where tools are initially placed)
-- METAL BOX = surgical tool box (where tools should be moved to)
-- WHITE ROBOTIC ARM = "Arm 101" mimic scrub nurse robot (performs the cleaning task)
-- The robotic arm will move surgical tools from the tray to the tool box
+STUDY THIS REFERENCE IMAGE TO LEARN:
 
-SURGICAL TOOLS TO RECOGNIZE:
-- SURGICAL SCISSORS: Metal cutting instruments with two blades and finger holes/rings
-- SURGICAL TWEEZERS: Thin metal grasping instruments with two arms that meet at the tip
+ENVIRONMENT COMPONENTS:
+- LEFT SIDE: Stainless steel metal box = surgical tool storage container (target location)
+- RIGHT SIDE: White foam board = surgical tray (current tool location)  
+- TOP: White robotic arm = SOARM 101 scrub nurse robot (performs the cleaning task)
 
-TASK CONTEXT:
-This simulates a scrub nurse cleaning the surgical tray by organizing surgical tools.
-The robot (Arm 101) will grip surgical tools and move them from the white foam board (tray) to the metal box (tool box).
+SURGICAL TOOLS TO RECOGNIZE (study these carefully):
+- SURGICAL SCISSORS: Metal cutting instruments with two blades and circular finger holes (can be curved or straight design)
+- SURGICAL TWEEZERS: Thin metal grasping instruments with pointed tips
 
-Study the reference image carefully to learn these visual characteristics."""
+NON-SURGICAL ITEMS TO IGNORE:
+- Office supplies: Pens, markers (non-medical design)
+- Plastic tools: Pink plastic scissors, colored plastic tweezers (plastic material, non-metallic)
+- Personal items: Watches, jewelry
 
-    user_message = """Study this reference image and learn the surgical environment setup.
+MATERIAL DISTINCTION:
+- Metal surgical tools: Shiny metallic appearance, professional medical-grade finish
+- Plastic tools: Colored plastic (pink, blue, etc.), non-metallic appearance
+- Office supplies: Pens with non-medical design and function"""
 
-Please identify and describe:
-1. The white foam board (surgical tray)
-2. The metal box (surgical tool box) 
-3. The white robotic arm (Arm 101 scrub nurse)
-4. Any surgical scissors (metal with two blades and finger holes)
-5. Any surgical tweezers (thin metal grasping instruments)
+    user_message = """This is your TRAINING IMAGE for surgical environment analysis.
 
-Respond with:
-<reasoning>
-I can see the surgical environment setup: [describe the white foam board, metal box, robotic arm, and any surgical tools present - their locations, shapes, materials, and distinctive features]
-</reasoning>
+LEARNING OBJECTIVES:
+1. Recognize metal vs plastic materials
+2. Distinguish surgical scissors (curved/straight) from plastic scissors
+3. Identify surgical tweezers vs office supplies
+4. Understand left-to-right analysis approach
 
-<plan>
-I have learned the surgical environment setup and what surgical scissors and tweezers look like for future analysis tasks.
-</plan>"""
+Please analyze this reference image with 5 items on the white foam board (left to right):
+1. Item 1 (leftmost): Identify material, type, surgical vs non-surgical
+2. Item 2: Identify material, type, surgical vs non-surgical  
+3. Item 3 (center): Identify material, type, surgical vs non-surgical
+4. Item 4: Identify material, type, surgical vs non-surgical
+5. Item 5 (rightmost): Identify material, type, surgical vs non-surgical
+
+Focus on material distinction and medical vs non-medical classification."""
 
     return system_message, user_message
 
