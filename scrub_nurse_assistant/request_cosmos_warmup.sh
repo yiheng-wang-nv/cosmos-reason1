@@ -3,7 +3,7 @@
 SERVER_IP="10.176.228.194"
 
 # Reference image showing surgical environment (you need to provide this)
-REFERENCE_IMAGE="images/surgical_tools_example.png"
+REFERENCE_IMAGE="images/env_example.png"
 
 echo "Starting LLM warm-up for surgical environment..."
 
