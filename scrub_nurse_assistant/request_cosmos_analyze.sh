@@ -8,4 +8,4 @@ python env_analyze.py --camera 2 \
 --system-file system_message.txt \
 --message "$(cat user_message.txt)" \
 --max-tokens 1024 \
---temperature 0.0
+--temperature 1.0
