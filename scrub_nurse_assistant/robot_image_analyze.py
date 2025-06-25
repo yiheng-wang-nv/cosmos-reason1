@@ -415,7 +415,7 @@ def execute_single_task(robot: SO101Robot, client: Gr00tSO101InferenceClient,
                 
                 # Send to robot
                 robot.set_target_state(torch.from_numpy(concat_action))
-                time.sleep(0.1)  # Small delay between actions
+                time.sleep(0.05)  # Small delay between actions
                 
                 # Update existing camera windows (clean feeds, no overlays)
                 live_img, live_img_room = robot.get_current_img()
@@ -713,22 +713,13 @@ def send_robot_image_request(image_base64: str, server_url: str = "http://localh
                       f"{colorize('tokens_used=', Colors.CYAN)}{colorize(str(config.get('actual_tokens', 'unknown')), Colors.WHITE)}")
             
             print_structured_response(result["response"])
-            print_analysis_summary(result)
+            # print_analysis_summary(result)
             
             # Extract robot commands
             commands = parse_robot_commands(result["response"])
             
-            if commands:
-                print(f"\n{colorize('🤖 EXTRACTED ROBOT COMMANDS FOR EXECUTION:', Colors.MAGENTA, bold=True)}")
-                print(f"{colorize('─' * 70, Colors.MAGENTA)}")
-                for i, cmd in enumerate(commands, 1):
-                    print(f"  {colorize(f'{i}.', Colors.CYAN)} {colorize(cmd, Colors.WHITE)}")
-                print(f"\n{colorize('Press', Colors.CYAN)} {colorize('e', Colors.RED, bold=True)} {colorize('to execute these commands on the robot.', Colors.CYAN)}")
-            else:
-                print(f"\n{colorize('No executable robot commands found in response.', Colors.YELLOW)}")
-            
-            print(f"\n{colorize('═' * 80, Colors.GREEN)}")
-            print(f"{colorize(Icons.SUCCESS, Colors.GREEN)} {colorize('Robot camera analysis completed!', Colors.GREEN, bold=True)}")
+            print(f"\n{colorize('═' * 80, Colors.YELLOW)}")
+            print(f"{colorize(Icons.SUCCESS, Colors.YELLOW)} {colorize('Robot camera analysis completed!', Colors.YELLOW, bold=True)}")
             
             return commands
             

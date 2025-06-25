@@ -9,17 +9,17 @@ Usage:
 python so101_robot_utils.py \
     --host 127.0.0.1 \
     --port 5555 \
-    --port_follower /dev/ttyACM1 \
+    --port_follower /dev/ttyACM2 \
     --task_description "Grip a straight scissor and put it in the box." \
-    --actions_to_execute 15 \
+    --actions_to_execute 30 \
     --monitor_cameras
 
 python so101_robot_utils.py \
     --host 127.0.0.1 \
     --port 5555 \
-    --port_follower /dev/ttyACM1 \
+    --port_follower /dev/ttyACM2 \
     --task_description "Grip a tweezer and put it in the box." \
-    --actions_to_execute 15 \
+    --actions_to_execute 30 \
     --monitor_cameras
 """
 
@@ -46,12 +46,12 @@ from gr00t.eval.service import ExternalRobotInferenceClient
 class SO101Robot:
     """SO101 Robot controller for GR00T policy evaluation."""
     
-    def __init__(self, port_follower: str = "/dev/ttyACM1", calibrate: bool = False, 
+    def __init__(self, port_follower: str = "/dev/ttyACM2", calibrate: bool = False, 
                  enable_camera: bool = True):
         self.config = So101RobotConfig()
         self.calibrate = calibrate
         self.enable_camera = enable_camera
-        self.cam_idx = (0, 2)
+        self.cam_idx = (1, 0)
         self.port_follower = port_follower
         
         # Configure robot
@@ -140,15 +140,15 @@ class SO101Robot:
         # Mode=0 for Position Control
         self.motor_bus.write("Mode", 0)
         # Set P_Coefficient to lower value to avoid shakiness
-        self.motor_bus.write("P_Coefficient", 10)
+        self.motor_bus.write("P_Coefficient", 16)
         # Set I_Coefficient and D_Coefficient
         self.motor_bus.write("I_Coefficient", 0)
         self.motor_bus.write("D_Coefficient", 32)
         # Close the write lock
         self.motor_bus.write("Lock", 0)
         # Set Maximum_Acceleration for faster response
-        self.motor_bus.write("Maximum_Acceleration", 254)
-        self.motor_bus.write("Acceleration", 254)
+        self.motor_bus.write("Maximum_Acceleration", 50)
+        self.motor_bus.write("Acceleration", 50)
 
     def move_to_initial_pose(self):
         """Move robot to initial pose."""
@@ -156,7 +156,7 @@ class SO101Robot:
         # SO101 initial pose (adjust these values as needed)
         initial_state = torch.tensor([8, 196, 180, 74, 95, 0], dtype=torch.float32)
         self.robot.send_action(initial_state)
-        time.sleep(2)
+        time.sleep(0.5)
 
     def go_home(self):
         """Move robot to home pose."""
@@ -164,7 +164,7 @@ class SO101Robot:
         # SO101 home pose (adjust these values as needed)
         home_state = torch.tensor([8, 196, 180, 74, 95, 0], dtype=torch.float32)
         self.set_target_state(home_state)
-        time.sleep(2)
+        time.sleep(0.5)
 
     def get_observation(self):
         """Get robot observation."""
@@ -383,7 +383,7 @@ def execute_policy_loop(robot: SO101Robot, client: Gr00tSO101InferenceClient, ar
             
             # Send to robot
             robot.set_target_state(torch.from_numpy(concat_action))
-            time.sleep(0.1)  # Small delay between actions
+            time.sleep(0.05)  # Small delay between actions
             
             # Get a fresh frame for monitoring and saving
             live_img, live_img_room = robot.get_current_img()
