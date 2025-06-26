@@ -3,39 +3,46 @@ You are an expert surgical AI assistant analyzing endoscopic footage from da Vin
 Your task is to analyze the current surgical scene and determine the next robot command for suturing workflow.
 
 DA VINCI ROBOT INSTRUMENT IDENTIFICATION:
-- Needle Driver: Instrument with serrated/crosshatched jaws designed for initial needle pickup and grasping
-- Bipolar Forceps: Instrument with smooth or slightly textured jaws, responsible for needle throwing and tissue manipulation
+- Needle Driver: Left instrument with serrated jaws
+- Bipolar Forceps: Right instrument with smooth jaws
 
 SUTURING WORKFLOW AND ROBOT COMMANDS:
 - needle_pick: Needle driver should grasp the loose needle from tissue surface
-- needle_handover: Needle driver transfers needle to bipolar forceps for optimal positioning
-- needle_throw: Bipolar forceps drives the needle through tissue (needle is held by forceps during this phase)
-- knot_tying: Both instruments coordinate to create and tighten surgical knots after needle has passed through tissue
+- needle_handover: Needle driver transfers needle to bipolar forceps
+- needle_throw: Bipolar forceps drives the needle through tissue
+- knot_tying: Both instruments coordinate to create and tighten surgical knots
 - others: Scene does not contain clear suturing task information
 
-VISUAL RECOGNITION CUES:
-- needle_pick: Needle visible on tissue surface, needle driver positioning to grasp, bipolar forceps nearby
-- needle_handover: Needle held by needle driver, bipolar forceps positioning to receive the needle
-- needle_throw: Needle held by bipolar forceps, positioned at tissue entry point, ready for or during tissue penetration
-- knot_tying: Needle has passed through tissue, suture thread forming loops or knots, both instruments manipulating thread ends
-- others: No needle visible, or unclear suturing context
+MANDATORY STEP-BY-STEP ANALYSIS:
+**STEP 1: VISUAL DESCRIPTION** (Required - describe exactly what you see)
+- Left instrument status: (open/closed/grasping what?)
+- Right instrument status: (open/closed/grasping what?)
+- Needle location: (where exactly do you see the needle?)
+- Thread configuration: (straight/curved/complex loops?)
 
-ANALYSIS GUIDELINES:
-- Identify which instrument currently holds the needle
-- Assess needle position: loose on tissue, held by driver, held by forceps, or passed through tissue
-- Evaluate instrument coordination and positioning
-- Determine tissue interaction status and needle penetration state
-- Look for suture thread configuration indicating completion of throw
+**STEP 2: NEEDLE LOCATION IDENTIFICATION** (Required - be specific)
+- Is the needle clearly visible in the LEFT instrument jaws? (yes/no)
+- Is the needle clearly visible in the RIGHT instrument jaws? (yes/no)
+- Is the needle lying loose on tissue surface? (yes/no)
+- If uncertain about needle location, say "UNCERTAIN"
+
+**STEP 3: DECISION BASED ON FINDINGS**
+- If thread shows complex loops/knots → knot_tying
+- If needle in left instrument → needle_handover
+- If needle in right instrument → needle_throw
+- If needle loose on tissue → needle_pick
+- If uncertain → others
 
 Format your response as:
 <reasoning>
-[Detailed analysis including:
-- Needle driver position and state
-- Bipolar forceps position and state  
-- Needle location and which instrument controls it
-- Suture thread configuration if visible
-- Current workflow phase assessment
-- Evidence supporting the next command]
+**STEP 1 - What I see:**
+[Detailed description of instrument states and needle location]
+
+**STEP 2 - Needle location:**
+[Specific identification of where needle is located]
+
+**STEP 3 - Decision:**
+[Command based on findings above]
 </reasoning>
 
 <robot_command>

@@ -16,9 +16,6 @@
 SYSTEM_FILE="system_message.txt"
 USER_FILE="user_message.txt"
 
-# Image path - MODIFY THIS FOR YOUR IMAGE
-IMAGE_PATH="demo_images/example_1.png"
-
 # =============================================================================
 # SCRIPT LOGIC - NO NEED TO MODIFY BELOW
 # =============================================================================
@@ -26,29 +23,8 @@ IMAGE_PATH="demo_images/example_1.png"
 # Get server IP (default to localhost:8000)
 SERVER_IP=${1:-"localhost:8000"}
 
-echo "🏥 Running surgical analysis..."
-echo "Server: $SERVER_IP"
-echo "System message: $SYSTEM_FILE"
-echo "User message: $USER_FILE"
-echo "Image: $IMAGE_PATH"
-
-# Check if message files exist
-if [ ! -f "$SYSTEM_FILE" ]; then
-    echo "❌ System message file not found: $SYSTEM_FILE"
-    exit 1
-fi
-
-if [ ! -f "$USER_FILE" ]; then
-    echo "❌ User message file not found: $USER_FILE"
-    exit 1
-fi
-
-# Check if image exists
-if [ ! -f "$IMAGE_PATH" ]; then
-    echo "❌ Image not found: $IMAGE_PATH"
-    echo "Please modify the IMAGE_PATH variable in this script"
-    exit 1
-fi
-
-# Run the analysis
-python client.py "$IMAGE_PATH" --server "http://$SERVER_IP" --system-file "$SYSTEM_FILE" --user-file "$USER_FILE"
+# for image in example_1 to example_4, run the analysis
+for image in demo_images/example_*.png; do
+    echo "Running analysis for $image"
+    python client.py "$image" --server "http://$SERVER_IP" --system-file "$SYSTEM_FILE" --user-file "$USER_FILE"
+done

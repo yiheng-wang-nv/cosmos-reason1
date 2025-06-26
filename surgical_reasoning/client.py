@@ -137,9 +137,6 @@ def get_command_color(command: str) -> str:
 def print_structured_response(response_text: str):
     """
     Parse and print the structured response from the server with enhanced formatting.
-    
-    Args:
-        response_text (str): Raw response text from the server
     """
     # Extract structured sections
     sections = extract_structured_response(response_text)
@@ -156,6 +153,22 @@ def print_structured_response(response_text: str):
                 print(f"  {colorize(line.strip(), Colors.WHITE)}")
             else:
                 print()  # Preserve empty lines for readability
+    else:
+        # If no reasoning found in XML tags, print the full response as reasoning
+        print(f"\n{colorize(f'{Icons.THINKING} SURGICAL ANALYSIS & REASONING:', Colors.CYAN, bold=True)}")
+        print(f"{colorize('─' * 70, Colors.CYAN)}")
+        
+        # Look for any text before robot_command tag
+        if "<robot_command>" in response_text:
+            reasoning_part = response_text.split("<robot_command>")[0].strip()
+            if reasoning_part:
+                reasoning_lines = reasoning_part.split('\n')
+                for line in reasoning_lines:
+                    if line.strip():
+                        print(f"  {colorize(line.strip(), Colors.WHITE)}")
+        else:
+            # Print full response if no tags found
+            print(f"  {colorize(response_text.strip(), Colors.WHITE)}")
     
     # Print robot command section with highlighted command
     if sections["robot_command"]:
@@ -180,12 +193,8 @@ def print_structured_response(response_text: str):
         
         description = command_descriptions.get(command.lower(), "Unknown command")
         print(f"    {colorize('→', Colors.CYAN)} {colorize(description, Colors.WHITE)}")
-    
-    # If no structured sections found, print raw response
-    if not sections["reasoning"] and not sections["robot_command"]:
-        print(f"\n{colorize(f'{Icons.INFO} RAW RESPONSE:', Colors.YELLOW, bold=True)}")
-        print(f"{colorize('─' * 70, Colors.YELLOW)}")
-        print(f"  {colorize(response_text.strip(), Colors.WHITE)}")
+    else:
+        print(f"\n{colorize(f'{Icons.ERROR} NO ROBOT COMMAND FOUND', Colors.RED, bold=True)}")
 
 
 def load_message_from_file(filename: str) -> Optional[str]:
