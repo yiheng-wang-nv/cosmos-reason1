@@ -1,0 +1,19 @@
+Analyze these endoscopic images from da Vinci robotic surgery. Determine what the robot should do next in the suturing workflow.
+
+WORKFLOW CONTEXT:
+- Needle driver (typically left instrument): Picks up needle initially
+- Bipolar forceps (typically right instrument): Receives needle and performs throwing action
+- Workflow: needle_pick → needle_handover → needle_throw → knot_tying
+
+Provide detailed reasoning about the current surgical state, then output the appropriate robot command:
+- needle_pick: If needle needs to be grasped by needle driver
+- needle_handover: If needle needs to be transferred from needle driver to bipolar forceps
+- needle_throw: If needle (held by forceps) should be driven through tissue
+- knot_tying: If knots need to be created after needle has passed through tissue
+- others: If no clear suturing task is evident
+
+Focus on identifying:
+- Which instrument currently holds the needle (if any)
+- Needle position relative to tissue
+- Instrument positioning and readiness
+- Evidence of completed vs pending actions 
