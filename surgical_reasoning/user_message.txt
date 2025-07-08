@@ -1,0 +1,34 @@
+Analyze this endoscopic image from da Vinci robotic surgery. Determine what the robot should do next in the suturing workflow.
+
+CRITICAL: Follow the 3-step analysis process exactly. Do not skip steps.
+
+**STEP 1: DESCRIBE WHAT YOU SEE**
+Look carefully at the image and describe:
+- Left instrument (needle driver): What is it holding/doing?
+- Right instrument (bipolar forceps): What is it holding/doing?
+- Needle: Where exactly is it located?
+- Thread: What pattern does it form?
+
+**STEP 2: IDENTIFY NEEDLE LOCATION**
+Be very specific about needle location:
+- In left instrument jaws? (yes/no)
+- In right instrument jaws? (yes/no)
+- On tissue surface? (yes/no)
+- If you cannot clearly see where the needle is, say "UNCERTAIN"
+
+**STEP 3: MAKE DECISION**
+Based on your observations:
+- Complex thread loops/knots → knot_tying
+- Needle in left instrument → needle_handover
+- Needle in right instrument → needle_throw
+- Needle loose on tissue → needle_pick
+- Uncertain → others
+
+**Do not guess. If you cannot clearly identify needle location, choose "others".**
+
+Commands:
+- needle_pick: Needle loose on tissue
+- needle_handover: Needle in left instrument
+- needle_throw: Needle in right instrument
+- knot_tying: Complex thread loops/knots
+- others: Uncertain or unclear 
